@@ -3,45 +3,6 @@ import Service from "../models/serviceModel.js";
 import Counter from "../models/counterModel.js";
 import Department from "../models/DepartmentModel.js";
 import User from "../models/userModel.js";
-import { createNotification } from "./notificationService.js";
-
-/**
- * 🎯 Helper: send notifications to admins + specific users
- */
-const sendNotification = async ({
-  title,
-  message,
-  roles = [],
-  userIds = [],
-  io = null,
-}) => {
-  if (!title || !message) return;
-
-  try {
-    const notification = await createNotification({
-      title,
-      message,
-      roles,
-      userIds,
-    });
-
-    if (io) {
-      // Emit to role rooms
-      roles.forEach((role) =>
-        io.to(`role_${role}`).emit("notifications:update", [notification]),
-      );
-
-      // Emit to specific users
-      if (Array.isArray(userIds)) {
-        userIds.forEach((id) =>
-          io.to(id.toString()).emit("notifications:update", [notification]),
-        );
-      }
-    }
-  } catch (err) {
-    console.error("Notification Error:", err.message);
-  }
-};
 
 /**
  * ➕ Create a service
@@ -66,15 +27,6 @@ export const createService = async (data, io = null) => {
     role: "STAFF",
   }).select("_id");
   const staffIds = staffUsers.map((u) => u._id);
-
-  // Send notification: department staff + admins
-  sendNotification({
-    title: "Service Created",
-    message: `Service "${service.name}" has been created in your department.`,
-    roles: ["ADMIN"], // all admins
-    userIds: staffIds, // department staff
-    io,
-  });
 
   return service;
 };
@@ -118,15 +70,6 @@ export const updateService = async (id, data, io = null) => {
   }).select("_id");
   const staffIds = staffUsers.map((u) => u._id);
 
-  // Send notification: department staff + admins
-  sendNotification({
-    title: "Service Updated",
-    message: `Service "${service.name}" has been updated in your department.`,
-    roles: ["ADMIN"],
-    userIds: staffIds,
-    io,
-  });
-
   return service;
 };
 
@@ -148,15 +91,6 @@ export const deleteService = async (id, io = null) => {
     role: "STAFF",
   }).select("_id");
   const staffIds = staffUsers.map((u) => u._id);
-
-  // Send notification: department staff + admins
-  sendNotification({
-    title: "Service Deleted",
-    message: `Service "${service.name}" has been deleted from your department.`,
-    roles: ["ADMIN"],
-    userIds: staffIds,
-    io,
-  });
 
   return true;
 };

@@ -1,55 +1,91 @@
 import { Router } from "express";
+
+import { requireAuth } from "../middlewares/authMiddleware.js";
+import { uploadProfile } from "../middlewares/multerMiddleware.js";
+import { validate } from "../middlewares/validateMiddleware.js";
+import { editProfileSchema } from "../Validators/editprofileValidation.js";
+
+// 👤 Profile
 import {
   getMyProfile,
   updateMyProfile,
 } from "../controllers/profile_controller.js";
-import { uploadProfile } from "../middlewares/multerMiddleware.js";
-import { editProfileSchema } from "../Validators/editprofileValidation.js";
-import { validate } from "../middlewares/validateMiddleware.js";
+
+// 🔔 Notifications
 import {
   getMyNotifications,
   deleteNotification,
   deleteAllNotifications,
-  setNotificationExpiry,
+  markAllNotificationsRead,
+  getUnreadNotificationCount,
 } from "../controllers/notificationController.js";
-import { getDepartmentById } from "../controllers/departmentController.js";
-import { getActiveServices } from "../controllers/serviceController.js";
 
+// 🏢 Department & Services
+import { getDepartmentById } from "../controllers/departmentController.js";
+import {
+  getActiveServices,
+  getServiceById,
+} from "../controllers/serviceController.js";
+
+// 🎫 Queue
 import { getQueueByCounter } from "../controllers/tokencommon.js";
-import { requireAuth } from "../middlewares/authMiddleware.js";
+
+// 🖼️ Banner
 import { getBanners } from "../controllers/bannerController.js";
-import { getServiceById } from "../controllers/serviceController.js";
 
 const router = Router();
 
+// 🔒 All routes require login
 router.use(requireAuth);
 
-// 👨‍🎓👩‍🏫 Shared access
+// ==================== 🔔 NOTIFICATIONS ====================
 
-// 🟢 Get all notifications for logged-in user
+// 📥 Get all notifications (with read/unread)
 router.get("/notifications", getMyNotifications);
 
-// 🟢 Delete a single notification by ID
+// 👁️ Mark notification as read
+router.patch("/notifications/read-all", markAllNotificationsRead);
+
+router.get("/notifications/unread-count", getUnreadNotificationCount);
+
+// ❌ Delete single notification (only for current user)
 router.delete("/notifications/:id", deleteNotification);
 
-// 🟢 Delete all notifications for logged-in user
+// ❌ Delete all notifications (only for current user)
 router.delete("/notifications", deleteAllNotifications);
 
-router.patch("/notifications/:id/expiry", setNotificationExpiry);
+// ==================== 🏢 SERVICES & DEPARTMENT ====================
 
+// Get all active services
 router.get("/service", getActiveServices);
+
+// Get service by ID
+router.get("/service/:id", getServiceById);
+
+// Get department by ID
 router.get("/department/:id", getDepartmentById);
 
-// 👤 Profile
+// ==================== 👤 PROFILE ====================
+
+// Get logged-in user profile
 router.get("/me", getMyProfile);
-router.get("/banner", getBanners);
-router.get("/service/:id", getServiceById);
+
+// Update profile
 router.put(
   "/me",
   uploadProfile.single("profileImage"),
   validate(editProfileSchema),
   updateMyProfile,
 );
+
+// ==================== 🎫 QUEUE ====================
+
+// Get queue by counter
 router.get("/queue/:counterId", getQueueByCounter);
+
+// ==================== 🖼️ BANNERS ====================
+
+// Get banners
+router.get("/banner", getBanners);
 
 export default router;

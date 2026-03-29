@@ -25,6 +25,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
   List<Map<String, dynamic>> services = [];
   List<Map<String, dynamic>> filteredServices = [];
   List<TokenModel> myTokens = [];
+
   final Map<String, TokenModel> _latestTokenMap = {};
   StreamSubscription? _tokenSub;
 
@@ -34,8 +35,10 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
   void initState() {
     super.initState();
     fetchAllData();
-    _tokenSub = SocketService().notifStream.listen((_) async {
-      await _updateTokensFromSocket();
+
+    _tokenSub = SocketService().tokenStream.listen((data) async {
+      if (!mounted) return;
+      await fetchAllData();
     });
   }
 
@@ -47,10 +50,7 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
 
   TokenModel? getLatestToken(String serviceId) => _latestTokenMap[serviceId];
 
-  // ================= SOCKET =================
-  Future<void> _updateTokensFromSocket() async {
-    final tokens = await TokenService.getMyTokens();
-
+  void _mapTokens(List<TokenModel> tokens) {
     _latestTokenMap.clear();
 
     for (var token in tokens) {
@@ -65,19 +65,13 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
         _latestTokenMap[sid] = token;
       }
     }
-
-    if (!mounted) return;
-
-    setState(() {
-      myTokens = tokens;
-    });
   }
 
-  // ================= FETCH =================
   Future<void> fetchAllData() async {
     try {
       final serviceRes = await TokenService.getWithAuth(
-          "${Api_Config.service_student}/${widget.departmentId}");
+        "${Api_Config.service_student}/${widget.departmentId}",
+      );
 
       List<Map<String, dynamic>> serviceList = [];
 
@@ -86,27 +80,15 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
 
         if (decoded is Map && decoded["data"] is List) {
           serviceList = (decoded["data"] as List)
-              .map((e) => Map<String, dynamic>.from(e))
+              .map((e) => Map<String, dynamic>.from(e ?? {}))
               .toList();
         }
       }
 
       final tokens = await TokenService.getMyTokens();
+      _mapTokens(tokens);
 
-      _latestTokenMap.clear();
-
-      for (var token in tokens) {
-        final sid = token.serviceId;
-        if (sid == null) continue;
-
-        final existing = _latestTokenMap[sid];
-        final current = token.createdAt ?? DateTime.now();
-        final old = existing?.createdAt ?? DateTime(2000);
-
-        if (existing == null || current.isAfter(old)) {
-          _latestTokenMap[sid] = token;
-        }
-      }
+      if (!mounted) return;
 
       setState(() {
         services = serviceList;
@@ -114,14 +96,18 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
         myTokens = tokens;
       });
     } catch (e) {
-      showBottomMessage(context, "Error: $e", isError: true);
+      if (mounted) {
+        showBottomMessage(context, "Error: $e", isError: true);
+      }
     }
   }
 
-  // ================= SEARCH =================
   void applySearch(String query) {
+    if (!mounted) return;
+
     setState(() {
       searchQuery = query;
+
       filteredServices = services.where((service) {
         final name = service["name"]?.toString().toLowerCase() ?? "";
         return name.contains(query.toLowerCase());
@@ -129,121 +115,13 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
     });
   }
 
-  // ================= PAYMENT =================
-  Future<void> showPaymentDialog(TokenModel token, dynamic fee) async {
-    bool loading = false;
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setStateDialog) => AlertDialog(
-          title: const Text("Payment"),
-          content: Text("Pay ₹$fee to confirm your token?"),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text("No"),
-            ),
-            ElevatedButton(
-              onPressed: loading
-                  ? null
-                  : () async {
-                      setStateDialog(() => loading = true);
-
-                      bool success = await TokenService.confirmPayment(
-                        tokenId: token.id,
-                        paymentId:
-                            DateTime.now().millisecondsSinceEpoch.toString(),
-                      );
-
-                      if (success) {
-                        Navigator.pop(ctx);
-                        showBottomMessage(context, "Payment Successful ✅");
-                        await fetchAllData();
-                      } else {
-                        showBottomMessage(context, "Payment Failed ❌",
-                            isError: true);
-                      }
-
-                      setStateDialog(() => loading = false);
-                    },
-              child: loading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text("Yes"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ================= CANCEL =================
-  Future<void> cancelToken(TokenModel token) async {
-    bool success = await TokenService.cancelToken(tokenId: token.id);
-
-    if (success) {
-      _latestTokenMap.remove(token.serviceId);
-      myTokens.removeWhere((t) => t.id == token.id);
-
-      setState(() {});
-      showBottomMessage(context, "Token cancelled");
-
-      await fetchAllData();
-    } else {
-      showBottomMessage(context, "Cancel failed ❌", isError: true);
-    }
-  }
-
-  // ================= URGENT CONFIRMATION =================
-  Future<bool> askUrgentConfirmation() async {
-    bool urgent = false;
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Urgent Token"),
-        content: const Text("Do you want to make this token urgent?"),
-        actions: [
-          TextButton(
-            onPressed: () {
-              urgent = false;
-              Navigator.pop(ctx);
-            },
-            child: const Text("No"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              urgent = true;
-              Navigator.pop(ctx);
-            },
-            child: const Text("Yes"),
-          ),
-        ],
-      ),
-    );
-    return urgent;
-  }
-
-  // ================= BOOK =================
   Future<void> handleServiceTap(Map<String, dynamic> service) async {
     final serviceId = service["_id"]?.toString();
     if (serviceId == null) return;
 
-    bool isUrgent = false;
-
-    // Ask urgent only if service allows urgent
-    if (service["allowUrgent"] == true) {
-      isUrgent = await askUrgentConfirmation();
-    }
-
     final booked = await TokenService.bookToken(
       serviceId: serviceId,
-      isUrgent: isUrgent,
+      isUrgent: false,
     );
 
     if (booked == null) {
@@ -251,37 +129,77 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
       return;
     }
 
-    TokenModel updatedToken = booked;
+    myTokens.add(booked);
+    _latestTokenMap[serviceId] = booked;
 
-    // For paid services → set status to waiting_payment
-    if (service["hasFee"] == true) {
-      updatedToken = TokenModel(
-        id: booked.id,
-        tokenNumber: booked.tokenNumber,
-        status: "waiting_payment",
-        serviceId: booked.serviceId,
-        isUrgent: booked.isUrgent,
-        createdAt: booked.createdAt,
-      );
-    }
-
-    myTokens.add(updatedToken);
-    _latestTokenMap[serviceId] = updatedToken;
-
-    // Only show bottom message if free
-    if (service["hasFee"] != true) {
-      showBottomMessage(context, "Token booked");
-    }
-
+    showBottomMessage(context, "Token booked");
     setState(() {});
   }
 
-  // ================= UI =================
+  Future<void> handleCancel(TokenModel token) async {
+    try {
+      final success = await TokenService.cancelToken(tokenId: token.id);
+
+      if (!success) {
+        showBottomMessage(context, "Cancel failed", isError: true);
+        return;
+      }
+
+      showBottomMessage(context, "Cancelled successfully");
+      await fetchAllData();
+    } catch (e) {
+      showBottomMessage(context, "Error: $e", isError: true);
+    }
+  }
+
+  // ✅ PAYMENT CONFIRM
+  Future<void> handlePayment(TokenModel token) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Confirm Payment"),
+        content: const Text("Do you want to proceed with payment?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("No"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Yes"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final success = await TokenService.confirmPayment(tokenId: token.id);
+
+      if (!success) {
+        showBottomMessage(context, "Payment failed", isError: true);
+        return;
+      }
+
+      showBottomMessage(context, "Payment successful");
+      await fetchAllData();
+    } catch (e) {
+      showBottomMessage(context, "Error: $e", isError: true);
+    }
+  }
+
   Widget buildServiceCard(Map<String, dynamic> service) {
     final serviceId = service["_id"]?.toString();
     final token = serviceId != null ? getLatestToken(serviceId) : null;
 
     final status = (token?.status ?? "").toLowerCase().trim();
+
+    final List counters =
+        (service["counters"] is List) ? service["counters"] : [];
+
+    final bool noCounter = counters.isEmpty;
+    final bool isDisabled = noCounter;
 
     String statusLabel = "Book";
 
@@ -293,74 +211,104 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
 
     final fee = service["hasFee"] == true ? service["fee"] ?? 0 : "Free";
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(service["name"] ?? "Service",
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 16)),
-                Text("Fee: $fee"),
-                if (status == "waiting" || status == "serving")
-                  Text(
-                    "Status: ${status.toUpperCase()}",
-                    style: const TextStyle(
-                        color: Colors.orange, fontWeight: FontWeight.w500),
-                  ),
-              ],
-            ),
+    // ✅ BUTTON COLOR FIX
+    Color bgColor = Colors.blue.shade100;
+    Color textColor = Colors.blue;
+
+    if (status == "waiting" || status == "serving") {
+      bgColor = Colors.red.shade100;
+      textColor = Colors.red;
+    } else if (status == "waiting_payment") {
+      bgColor = Colors.orange.shade100;
+      textColor = Colors.orange;
+    }
+
+    return AbsorbPointer(
+      absorbing: isDisabled,
+      child: Opacity(
+        opacity: isDisabled ? 0.5 : 1,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+              )
+            ],
           ),
-          GestureDetector(
-            onTap: () async {
-              if (status == "waiting" || status == "serving") {
-                if (token != null) await cancelToken(token);
-              } else if (status == "waiting_payment") {
-                if (token != null) await showPaymentDialog(token, fee);
-              } else {
-                await handleServiceTap(service);
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: (status == "waiting" || status == "serving")
-                    ? Colors.red.shade100
-                    : status == "waiting_payment"
-                        ? Colors.orange.shade100
-                        : const Color(0xffD0E8FF),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                statusLabel,
-                style: TextStyle(
-                  color: (status == "waiting" || status == "serving")
-                      ? Colors.red
-                      : status == "waiting_payment"
-                          ? Colors.orange
-                          : Colors.blue,
-                  fontWeight: FontWeight.w600,
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(service["name"] ?? "Service",
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text("Fee: $fee"),
+                    if (token != null)
+                      Text(
+                        "Status: ${status.toUpperCase()}",
+                        style: const TextStyle(
+                            color: Colors.orange, fontWeight: FontWeight.w500),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          noCounter ? "NO COUNTER" : "AVAILABLE",
+                          style: TextStyle(
+                            color: noCounter ? Colors.red : Colors.green,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ),
+              GestureDetector(
+                onTap: isDisabled
+                    ? null
+                    : () async {
+                        if (status == "waiting" || status == "serving") {
+                          if (token != null) {
+                            await handleCancel(token);
+                          }
+                        } else if (status == "waiting_payment") {
+                          if (token != null) {
+                            await handlePayment(token);
+                          }
+                        } else {
+                          await handleServiceTap(service);
+                        }
+                      },
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDisabled ? Colors.grey.shade300 : bgColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    isDisabled ? "No Counter" : statusLabel,
+                    style: TextStyle(
+                      color: isDisabled ? Colors.grey : textColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  // ================= BUILD =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -377,8 +325,9 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                 filled: true,
                 fillColor: Colors.grey.shade200,
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: BorderSide.none),
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide.none,
+                ),
               ),
             ),
           ),

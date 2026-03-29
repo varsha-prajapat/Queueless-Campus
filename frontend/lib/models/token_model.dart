@@ -61,6 +61,7 @@ class TokenModel {
   final bool isUrgent;
   final String? serviceId;
   final String? studentId;
+  final String? counterId; // ✅ Added
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -71,6 +72,7 @@ class TokenModel {
     this.isUrgent = false,
     this.serviceId,
     this.studentId,
+    this.counterId, // ✅ Added
     this.createdAt,
     this.updatedAt,
   });
@@ -113,10 +115,13 @@ class TokenModel {
       isUrgent: json["isUrgent"] is bool ? json["isUrgent"] : false,
       serviceId: parseServiceId(json["serviceId"] ?? json["service"]),
       studentId: studentId ?? json["studentId"]?.toString(),
+      counterId: json["counterId"]?.toString(), // ✅ Parse counterId
       createdAt: parseDate(json["createdAt"]),
       updatedAt: parseDate(json["updatedAt"]),
     );
   }
+
+  get calledCount => null;
 
   /// Convert object to JSON
   Map<String, dynamic> toJson() {
@@ -127,6 +132,7 @@ class TokenModel {
       "isUrgent": isUrgent,
       "serviceId": serviceId,
       "studentId": studentId,
+      "counterId": counterId, // ✅ Include counterId in JSON
       "createdAt": createdAt?.toIso8601String(),
       "updatedAt": updatedAt?.toIso8601String(),
     };
@@ -137,7 +143,7 @@ class TokenModel {
 
   @override
   String toString() {
-    return 'TokenModel(id: $id, number: $tokenNumber, status: $status, urgent: $isUrgent, serviceId: $serviceId, studentId: $studentId, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'TokenModel(id: $id, number: $tokenNumber, status: $status, urgent: $isUrgent, serviceId: $serviceId, studentId: $studentId, counterId: $counterId, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   TokenModel copyWith({
@@ -147,6 +153,7 @@ class TokenModel {
     bool? isUrgent,
     String? serviceId,
     String? studentId,
+    String? counterId, // ✅ Added
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -157,6 +164,7 @@ class TokenModel {
       isUrgent: isUrgent ?? this.isUrgent,
       serviceId: serviceId ?? this.serviceId,
       studentId: studentId ?? this.studentId,
+      counterId: counterId ?? this.counterId, // ✅ Added
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

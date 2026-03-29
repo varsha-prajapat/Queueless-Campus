@@ -2,47 +2,97 @@ import mongoose from "mongoose";
 
 const notificationSchema = new mongoose.Schema(
   {
-    title: { type: String, required: true, trim: true },
-    message: { type: String, required: true, trim: true },
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-    // Department-wise notification (optional)
-    departmentId: { type: mongoose.Schema.Types.ObjectId, ref: "Department" },
+    message: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-    // Types of recipients
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // Personal notification
+    counterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Counter",
+      default: null,
+    },
+
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
     roles: {
-      type: [{ type: String, enum: ["ADMIN", "STAFF", "STUDENT", "ALL"] }],
-      default: [],
-    },
-    isGlobal: { type: Boolean, default: false },
-
-    // Soft delete per user
-    hiddenFor: {
-      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      type: [String],
+      enum: ["ADMIN", "STAFF", "STUDENT"],
       default: [],
     },
 
-    // Track read per user
-    readBy: {
-      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-      default: [],
+    isGlobal: {
+      type: Boolean,
+      default: false,
     },
 
-    // Per-user expiry (handled manually)
-    expiresFor: {
-      type: Map,
-      of: Date, // userId -> expiry datetime
-      default: {},
+    hiddenFor: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    readBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    type: {
+      type: String,
+      enum: [
+        "PAYMENT_SUCCESS",
+        "PAYMENT_RECEIVED",
+        "CALLED",
+        "SKIPPED",
+        "CREATED",
+        "INFO",
+      ],
+      default: "INFO",
     },
   },
-  { timestamps: true },
+  {
+    timestamps: true,
+  },
 );
 
-// Fast queries
+/* ================= INDEXES ================= */
+
+// fast user notifications
 notificationSchema.index({ userId: 1 });
+
+// role-based filtering
 notificationSchema.index({ roles: 1 });
+
+// global notifications
 notificationSchema.index({ isGlobal: 1 });
+
+// counter-based notifications
+notificationSchema.index({ counterId: 1 });
+
+// hide/read optimization
 notificationSchema.index({ hiddenFor: 1 });
-notificationSchema.index({ departmentId: 1 }); // index for department-wise queries
+notificationSchema.index({ readBy: 1 });
+
+// main compound query optimization
+notificationSchema.index({
+  isGlobal: 1,
+  roles: 1,
+  counterId: 1,
+  userId: 1,
+});
 
 export default mongoose.model("Notification", notificationSchema);

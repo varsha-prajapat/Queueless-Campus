@@ -57,8 +57,6 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
-
-    // ✅ FIX: store department as ObjectId reference
     departmentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Department",
@@ -69,11 +67,6 @@ const userSchema = new mongoose.Schema(
     profileImage: {
       type: String,
       default: "",
-    },
-
-    notificationExpiry: {
-      type: Number,
-      default: 0, // 0 = no expiry
     },
   },
   { timestamps: true },

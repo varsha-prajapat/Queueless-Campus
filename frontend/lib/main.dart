@@ -4,7 +4,9 @@ import 'package:app_links/app_links.dart';
 import 'package:provider/provider.dart';
 
 import './provider/profile_provider.dart';
-import './provider/TokenProvider.dart'; // ✅ lowercase & correct import
+import './provider/TokenProvider.dart';
+import './provider/notification_provider.dart'; // ✅ ADDED FIX
+
 import "./services/socket_service.dart";
 import 'routes/app_routes.dart';
 import "./utils/auth_role_helper.dart";
@@ -95,8 +97,14 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(
           create: (_) => ProfileProvider(),
         ),
+
         ChangeNotifierProvider(
-          create: (_) => TokenProvider(), // ✅ TokenProvider initialized here
+          create: (_) => TokenProvider(),
+        ),
+
+        // ✅ FIXED: NotificationProvider added
+        ChangeNotifierProvider(
+          create: (_) => NotificationProvider(),
         ),
       ],
       child: MaterialApp(

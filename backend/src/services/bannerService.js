@@ -1,60 +1,16 @@
-// services/bannerService.js
 import Banner from "../models/bannerModel.js";
 import mongoose from "mongoose";
-import { createNotification } from "./notificationService.js";
-
-/**
- * 🎯 Helper: resolve target roles for notification
- */
-const resolveRoles = (targetRole) => {
-  if (!targetRole) return [];
-  if (Array.isArray(targetRole)) return targetRole;
-  return [targetRole];
-};
-
-/**
- * 🎯 Helper: send banner notifications
- */
-const sendBannerNotification = async ({ banner, io }) => {
-  if (!banner) return;
-
-  const roles = resolveRoles(banner.targetRole);
-  const userIds = banner.departmentId?.staffIds || []; // if departmentId has staffIds
-
-  try {
-    const notification = await createNotification({
-      title: `Banner: ${banner.title}`,
-      message: banner.message,
-      roles: roles.length ? roles : ["ALL"],
-      userIds,
-    });
-
-    if (io) {
-      // Emit to roles
-      roles.forEach((role) =>
-        io.to(`role_${role}`).emit("notifications:update", [notification]),
-      );
-      // Emit to department staff
-      userIds.forEach((id) =>
-        io.to(id.toString()).emit("notifications:update", [notification]),
-      );
-    }
-  } catch (err) {
-    console.error("Notification Error (banner):", err.message);
-  }
-};
+import Department from "../models/DepartmentModel.js";
 
 /**
  * ➕ Create a banner
  */
 export const createBanner = async (data, io = null) => {
-  if (!data.title || !data.message)
-    throw new Error("Banner requires title and message");
+  if (!data.title || !data.description) {
+    throw new Error("Banner requires title and description");
+  }
 
   const banner = await Banner.create(data);
-
-  // 🔔 Send notification
-  await sendBannerNotification({ banner, io });
 
   io?.emit("bannerCreated", banner);
 
@@ -62,11 +18,12 @@ export const createBanner = async (data, io = null) => {
 };
 
 /**
- * 📄 Get Banners (filtered by role + department)
+ * 📄 Get Banners
  */
 export const getBanners = async (role, departmentId) => {
-  // Admin sees all
-  if (role === "ADMIN") return await Banner.find().sort({ createdAt: -1 });
+  if (role === "ADMIN") {
+    return await Banner.find().sort({ createdAt: -1 });
+  }
 
   const query = {
     status: "active",
@@ -86,8 +43,9 @@ export const getBanners = async (role, departmentId) => {
  * 🔎 Get banner by ID
  */
 export const getBannerById = async (id) => {
-  if (!mongoose.Types.ObjectId.isValid(id))
+  if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new Error("Invalid banner ID");
+  }
   return await Banner.findById(id);
 };
 
@@ -95,16 +53,16 @@ export const getBannerById = async (id) => {
  * ✏️ Update banner
  */
 export const updateBanner = async (id, data, io = null) => {
-  if (!mongoose.Types.ObjectId.isValid(id))
+  if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new Error("Invalid banner ID");
+  }
 
   const banner = await Banner.findByIdAndUpdate(id, data, {
     new: true,
     runValidators: true,
   });
-  if (!banner) return null;
 
-  await sendBannerNotification({ banner, io });
+  if (!banner) return null;
 
   io?.emit("bannerUpdated", banner);
 
@@ -115,16 +73,18 @@ export const updateBanner = async (id, data, io = null) => {
  * ❌ Delete banner
  */
 export const deleteBanner = async (id, io = null) => {
-  if (!mongoose.Types.ObjectId.isValid(id))
+  if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new Error("Invalid banner ID");
+  }
 
   const banner = await Banner.findByIdAndDelete(id);
+
   if (!banner) return null;
 
-  // 🔔 Notify roles and department staff
-  await sendBannerNotification({ banner, io });
-
-  io?.emit("bannerDeleted", { id: banner._id, title: banner.title });
+  io?.emit("bannerDeleted", {
+    id: banner._id,
+    title: banner.title,
+  });
 
   return banner;
 };

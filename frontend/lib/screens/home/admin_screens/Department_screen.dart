@@ -67,9 +67,7 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
     _socketService.connect();
 
     // 4️⃣ Listen notifications
-    _notifSub = _socketService.notifStream.listen((data) {
-      _loadDepartments();
-    });
+  
   }
 
   // ================= SEARCH =================

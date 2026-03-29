@@ -9,7 +9,6 @@ void showBottomMessage(
   Duration duration = const Duration(seconds: 3),
 }) {
   final overlay = Overlay.of(context);
-  if (overlay == null) return;
 
   late OverlayEntry overlayEntry;
 

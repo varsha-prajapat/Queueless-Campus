@@ -1,69 +1,130 @@
 import 'package:flutter/material.dart';
 import '../../../models/counter_model.dart';
 import '../../../services/staff_service/counter_service.dart';
+import '../../../services/socket_service.dart';
 import 'counter_card.dart';
 
 class CounterListWidget extends StatefulWidget {
   final String staffId;
 
-  const CounterListWidget({
-    super.key,
-    required this.staffId,
-  });
+  const CounterListWidget({super.key, required this.staffId});
 
   @override
   State<CounterListWidget> createState() => _CounterListWidgetState();
 }
 
 class _CounterListWidgetState extends State<CounterListWidget> {
-  late Future<List<CounterModel>> _counterFuture;
+  final SocketService _socketService = SocketService();
+
+  List<CounterWithService> _counters = [];
+
+  // ✅ keep reference of listener
+  late final Function(dynamic) _counterListener;
 
   @override
   void initState() {
     super.initState();
-    _counterFuture = CounterService.getUserCounters(staffId: widget.staffId);
+    _loadCounters();
+    _setupSocketListener();
+  }
+
+  /// ---------------- LOAD COUNTERS ----------------
+  Future<void> _loadCounters() async {
+    try {
+      final counters =
+          await CounterService.getUserCounters(staffId: widget.staffId);
+
+      // 🔥 optimize: fetch all service names in parallel
+      final countersWithServices =
+          await Future.wait(counters.map((counter) async {
+        final serviceName =
+            await CounterService.getServiceName(counter.serviceId);
+
+        return CounterWithService(
+          counter: counter,
+          serviceName: serviceName,
+        );
+      }));
+
+      if (!mounted) return;
+
+      setState(() {
+        _counters = countersWithServices;
+      });
+    } catch (e) {
+      debugPrint("Counter load error: $e");
+    }
+  }
+
+  /// ---------------- SOCKET LISTENER ----------------
+  void _setupSocketListener() {
+    _counterListener = (data) {
+      if (data == null || data is! Map) return;
+
+      final updatedCounterId = data['counterId']?.toString();
+      final updatedServiceName = data['serviceName']?.toString();
+
+      if (updatedCounterId == null || updatedServiceName == null) return;
+
+      final index = _counters
+          .indexWhere((c) => c.counter.id.toString() == updatedCounterId);
+
+      if (index != -1) {
+        final oldServiceName = _counters[index].serviceName;
+
+        if (oldServiceName != updatedServiceName) {
+          if (!mounted) return;
+
+          setState(() {
+            _counters[index] = CounterWithService(
+              counter: _counters[index].counter,
+              serviceName: updatedServiceName,
+            );
+          });
+        }
+      }
+    };
+
+    // ✅ register listener
+    _socketService.on('counter:update', _counterListener);
+  }
+
+  @override
+  void dispose() {
+    // ✅ remove only this listener
+    _socketService.socket?.off('counter:update', _counterListener);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<CounterModel>>(
-      future: _counterFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    if (_counters.isEmpty) {
+      return const SizedBox(); // no spinner
+    }
 
-        if (snapshot.hasError) {
-          return Center(child: Text("Error: ${snapshot.error}"));
-        }
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _counters.length,
+      itemBuilder: (context, index) {
+        final item = _counters[index];
 
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text("No counters assigned to you"));
-        }
-
-        final counters = snapshot.data!;
-
-        return Column(
-          children: counters.map((counter) {
-            return FutureBuilder<String>(
-              future: CounterService.getServiceName(counter.serviceId),
-              builder: (context, serviceSnapshot) {
-                if (!serviceSnapshot.hasData) {
-                  return CounterCard(
-                    counter: counter,
-                    serviceName: "Loading service...",
-                  );
-                }
-
-                return CounterCard(
-                  counter: counter,
-                  serviceName: serviceSnapshot.data!,
-                );
-              },
-            );
-          }).toList(),
+        return CounterCard(
+          counter: item.counter,
+          serviceName: item.serviceName,
         );
       },
     );
   }
+}
+
+/// ---------------- HELPER MODEL ----------------
+class CounterWithService {
+  final CounterModel counter;
+  final String serviceName;
+
+  const CounterWithService({
+    required this.counter,
+    required this.serviceName,
+  });
 }

@@ -168,22 +168,16 @@ class TokenService {
 
             return tokensList.map((e) {
               return TokenModel(
-                /// 🔥 FIXED ID
-                id: e["_id"] ?? e["tokenId"] ?? "",
-
+                id: e["tokenId"] ?? "",
                 tokenNumber: e["tokenNumber"] ?? 0,
-
-                /// 🔥 normalize status
                 status: (e["status"] ?? "").toString().toLowerCase(),
-
-                serviceId: "",
+                serviceId: e["service"]?["id"] ?? "",
                 isUrgent: e["isUrgent"] ?? false,
-
                 createdAt: e["createdAt"] != null
-                    ? DateTime.tryParse(e["createdAt"])
+                    ? DateTime.tryParse(e["createdAt"].toString())
                     : null,
                 updatedAt: e["updatedAt"] != null
-                    ? DateTime.tryParse(e["updatedAt"])
+                    ? DateTime.tryParse(e["updatedAt"].toString())
                     : null,
               );
             }).toList();
@@ -192,7 +186,8 @@ class TokenService {
       }
 
       return [];
-    } catch (_) {
+    } catch (e) {
+      print("getAllTokensOfStaffDetail error: $e");
       return [];
     }
   }

@@ -1,35 +1,261 @@
 import Notification from "../models/NotificationModel.js";
+import Counter from "../models/counterModel.js";
+import mongoose from "mongoose";
 
+/**
+ * 🔔 Create Notification + Emit
+ */
 export const createNotification = async (io, data) => {
   try {
-    const notification = await Notification.create(data);
-
-    // Send to personal user
-    if (notification.userId) {
-      io.to(notification.userId.toString()).emit("notifications:update", [
-        notification,
-      ]);
-      console.log("Notification sent to personal room:", notification.userId);
+    if (!data.title || !data.message) {
+      throw new Error("Title & message required");
     }
 
-    // Send to role rooms
-    if (notification.roles && notification.roles.length > 0) {
-      notification.roles.forEach((role) => {
-        const room = `role_${role}`;
-        io.to(room).emit("notifications:update", [notification]);
-        console.log("Notification sent to role room:", room);
+    if (
+      !data.userId &&
+      !data.isGlobal &&
+      (!data.roles || data.roles.length === 0) &&
+      !data.departmentId &&
+      !data.counterId
+    ) {
+      throw new Error("Target required");
+    }
+
+    const notification = await Notification.create(data);
+    const notif = notification.toObject();
+    if (!io) return notif;
+
+    const payload = {
+      type: "NEW",
+      data: notif,
+    };
+
+    /* 🌍 GLOBAL */
+    if (notif.isGlobal) {
+      io.emit("notification", payload);
+      return notif;
+    }
+
+    /* 👤 PERSONAL */
+    if (notif.userId) {
+      io.to(notif.userId.toString()).emit("notification", payload);
+    }
+
+    /* 🎭 ROLE */
+    if (notif.roles?.length) {
+      notif.roles.forEach((role) => {
+        io.to(`role_${role}`).emit("notification", payload);
       });
     }
 
-    // Send global notifications
-    if (notification.isGlobal) {
-      io.emit("notifications:update", [notification]);
-      console.log("Notification sent globally");
+    /* 🏢 DEPARTMENT */
+    if (notif.departmentId) {
+      io.to(`dept_${notif.departmentId}`).emit("notification", payload);
     }
 
-    return notification;
+    /* 🧑‍💼 COUNTER */
+    if (notif.counterId) {
+      io.to(`counter_${notif.counterId}`).emit("notification", payload);
+    }
+
+    return notif;
   } catch (err) {
-    console.error("Error creating notification:", err);
+    console.error("❌ Create Notification Error:", err.message);
     throw err;
+  }
+};
+
+/**
+ * 📥 Get Notifications + Unread Count
+ */
+export const getUserNotifications = async (user) => {
+  try {
+    const userId = user._id;
+    const role = user.role?.toUpperCase();
+    const deptId = user.departmentId;
+
+    const now = new Date();
+
+    let counterIds = [];
+
+    if (role === "STAFF") {
+      const counters = await Counter.find({
+        staffIds: userId,
+        isActive: true,
+      }).select("_id");
+
+      counterIds = counters.map((c) => c._id);
+    }
+
+    const query = {
+      $and: [
+        {
+          $or: [
+            { userId },
+            { roles: { $in: [role] } },
+            { departmentId: deptId },
+            ...(counterIds.length ? [{ counterId: { $in: counterIds } }] : []),
+            { isGlobal: true },
+          ],
+        },
+        { hiddenFor: { $nin: [userId] } },
+      ],
+    };
+
+    const notifications = await Notification.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
+
+    let unreadCount = 0;
+
+    const formattedNotifications = notifications
+      .map((n) => {
+        const expiresAt =
+          n.expiresFor?.[userId.toString()] || n.expiresAt || null;
+
+        const isRead = n.readBy?.some(
+          (id) => id.toString() === userId.toString(),
+        );
+
+        if (!isRead && (!expiresAt || expiresAt > now)) {
+          unreadCount++;
+        }
+
+        return {
+          _id: n._id,
+          title: n.title,
+          message: n.message,
+          type: n.type,
+          isRead,
+          expiresAt,
+          createdAt: n.createdAt,
+        };
+      })
+      .filter((n) => !n.expiresAt || n.expiresAt > now);
+
+    return {
+      notifications: formattedNotifications,
+      unreadCount,
+    };
+  } catch (err) {
+    console.error("❌ Get Notifications Error:", err.message);
+    throw err;
+  }
+};
+
+/**
+ * 👁️ Mark All Read
+ */
+export const markAllAsRead = async (io, userId) => {
+  try {
+    await Notification.updateMany(
+      { readBy: { $ne: userId } },
+      { $addToSet: { readBy: userId } },
+    );
+
+    if (io) {
+      io.to(userId.toString()).emit("notification", {
+        type: "READ_ALL",
+      });
+    }
+
+    return true;
+  } catch (err) {
+    console.error("❌ Mark All Read Error:", err.message);
+    throw err;
+  }
+};
+
+/**
+ * ❌ Delete One
+ */
+export const deleteNotification = async (io, userId, notificationId) => {
+  try {
+    const notification = await Notification.findById(notificationId);
+    if (!notification) throw new Error("Notification not found");
+
+    if (!notification.hiddenFor.includes(userId)) {
+      notification.hiddenFor.push(userId);
+      await notification.save();
+    }
+
+    if (io) {
+      io.to(userId.toString()).emit("notification", {
+        type: "DELETE_ONE",
+        data: { notificationId },
+      });
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("❌ Delete Notification Error:", err.message);
+    throw err;
+  }
+};
+
+/**
+ * ❌ Delete All
+ */
+export const deleteAllNotifications = async (io, userId) => {
+  try {
+    await Notification.updateMany(
+      { hiddenFor: { $nin: [userId] } },
+      { $addToSet: { hiddenFor: userId } },
+    );
+
+    if (io) {
+      io.to(userId.toString()).emit("notification", {
+        type: "DELETE_ALL",
+      });
+    }
+
+    return true;
+  } catch (err) {
+    console.error("❌ Delete All Error:", err.message);
+    throw err;
+  }
+};
+
+export const getUnreadCount = async (userId, role) => {
+  try {
+    if (!userId) {
+      throw new Error("User ID is required");
+    }
+
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+    let counterIds = [];
+
+    // If role is STAFF, include counter-based notifications
+    if (role?.toUpperCase() === "STAFF") {
+      const counters = await Counter.find({
+        staffIds: userObjectId,
+        isActive: true,
+      }).select("_id");
+
+      counterIds = counters.map((c) => c._id);
+    }
+
+    // Build query
+    const query = {
+      $and: [
+        {
+          $or: [
+            { userId: userObjectId }, // personal notifications
+            { isGlobal: true }, // global notifications
+            ...(counterIds.length ? [{ counterId: { $in: counterIds } }] : []), // counter notifications for staff
+          ],
+        },
+        { hiddenFor: { $ne: userObjectId } }, // not hidden
+        { readBy: { $ne: userObjectId } }, // not read
+      ],
+    };
+
+    // Count unread notifications
+    const count = await Notification.countDocuments(query);
+
+    return count;
+  } catch (error) {
+    console.error("❌ getUnreadCount Error:", error.message);
+    throw error;
   }
 };

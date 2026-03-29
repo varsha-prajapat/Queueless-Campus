@@ -15,6 +15,14 @@ class CounterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFF5E48EC);
 
+    final String counterName =
+        (counter.name.isNotEmpty) ? counter.name : "Unnamed Counter";
+
+    final String service =
+        (serviceName.isNotEmpty) ? serviceName : "No Service";
+
+    final bool isActive = counter.isActive;
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
@@ -27,28 +35,28 @@ class CounterCard extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.12),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
         border: Border.all(
           color: const Color(0xFFD6D1FF),
           width: 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            // Service Icon
+            /// 🔵 ICON
             Container(
               height: 46,
               width: 46,
               decoration: BoxDecoration(
-                color: primaryColor.withOpacity(.18),
+                color: primaryColor.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(
@@ -60,14 +68,16 @@ class CounterCard extends StatelessWidget {
 
             const SizedBox(width: 14),
 
-            // Counter Info
+            /// 🧾 TEXT INFO
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Counter Name
+                  /// Counter Name
                   Text(
-                    counter.name,
+                    counterName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -77,9 +87,11 @@ class CounterCard extends StatelessWidget {
 
                   const SizedBox(height: 4),
 
-                  // Service Name
+                  /// Service Name
                   Text(
-                    serviceName,
+                    service,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey.shade800,
@@ -91,27 +103,36 @@ class CounterCard extends StatelessWidget {
 
             const SizedBox(width: 10),
 
-            // Status Badge
+            /// 🟢 STATUS BADGE
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 6,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: counter.isActive
+                color: isActive
                     ? const Color(0xFFDFF5E4)
                     : const Color(0xFFFFE3E3),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(
-                counter.isActive ? "Active" : "Inactive",
-                style: TextStyle(
-                  color: counter.isActive
-                      ? const Color(0xFF2E7D32)
-                      : const Color(0xFFC62828),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Row(
+                children: [
+                  Icon(
+                    isActive ? Icons.circle : Icons.circle_outlined,
+                    size: 10,
+                    color: isActive
+                        ? const Color(0xFF2E7D32)
+                        : const Color(0xFFC62828),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    isActive ? "Active" : "Inactive",
+                    style: TextStyle(
+                      color: isActive
+                          ? const Color(0xFF2E7D32)
+                          : const Color(0xFFC62828),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

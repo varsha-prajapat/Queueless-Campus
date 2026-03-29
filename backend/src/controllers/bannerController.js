@@ -18,8 +18,8 @@ export const createBanner = async (req, res) => {
     if (departmentId === "ALL") departmentId = null;
 
     const bannerData = {
-      title: req.body.title?.trim(),
-      description: req.body.description?.trim(),
+      title: req.body.title?.trim() || "",
+      description: req.body.description?.trim() || "",
       targetRole: req.body.targetRole
         ? req.body.targetRole.trim().toUpperCase()
         : "ALL",
@@ -29,12 +29,7 @@ export const createBanner = async (req, res) => {
       createdBy: req.user?._id,
     };
 
-    const banner = await bannerService.createBanner(bannerData);
-
-    // Emit real-time event
-    if (req.io) {
-      req.io.emit("bannerCreated", banner);
-    }
+    const banner = await bannerService.createBanner(bannerData, req.io);
 
     return res.status(201).json({
       success: true,
@@ -102,6 +97,7 @@ export const getBanners = async (req, res) => {
   try {
     const role = req.user?.role;
     const departmentId = req.user?.departmentId || null;
+
     const banners = await bannerService.getBanners(role, departmentId);
 
     return res.status(200).json({
@@ -146,22 +142,22 @@ export const updateBanner = async (req, res) => {
       status: req.body.status,
     };
 
+    // remove undefined fields (IMPORTANT FIX)
+    Object.keys(updateData).forEach(
+      (key) => updateData[key] === undefined && delete updateData[key],
+    );
+
     if (req.file) {
       updateData.image = `/banner/${req.file.filename}`;
     }
 
-    const banner = await bannerService.updateBanner(id, updateData);
+    const banner = await bannerService.updateBanner(id, updateData, req.io);
 
     if (!banner) {
       return res.status(404).json({
         success: false,
         message: "Banner not found",
       });
-    }
-
-    // Emit real-time event
-    if (req.io) {
-      req.io.emit("bannerUpdated", banner);
     }
 
     return res.status(200).json({
@@ -200,18 +196,13 @@ export const deleteBanner = async (req, res) => {
       });
     }
 
-    const banner = await bannerService.deleteBanner(id);
+    const banner = await bannerService.deleteBanner(id, req.io);
 
     if (!banner) {
       return res.status(404).json({
         success: false,
         message: "Banner not found",
       });
-    }
-
-    // Emit real-time event
-    if (req.io) {
-      req.io.emit("bannerDeleted", { id: banner._id, title: banner.title });
     }
 
     return res.status(200).json({

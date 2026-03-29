@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+
 import '../../../../shared/widgets/banner_slider.dart';
 import '../../../../shared/services/Banner_Service.dart';
 import '../../../../models/banner_model.dart';
+
 import '../../staff_widgets/counter_list_widget.dart';
 import '../../../home/staff_widgets/token_rows.dart';
 import '../../staff_widgets/TokenActionButtons.dart';
+
 import '../../../../services/staff_service/token_service.dart';
 import '../../../../models/token_model.dart';
 import '../../../../shared/screens/admin_contact_card.dart';
@@ -29,171 +32,224 @@ class StaffSection extends StatefulWidget {
 }
 
 class _StaffSectionState extends State<StaffSection> {
-  // Banner state
   List<BannerModel> _banners = [];
   bool _loadingBanners = true;
 
-  // Counter state
   bool _counterAssigned = false;
 
-  // Token state
-  TokenStats? _tokenStats;
+  List<TokenModel> _tokens = [];
+  TokenStats _tokenStats = TokenStats.empty();
   TokenModel? _currentToken;
-  bool _loadingStats = true;
-  bool _loadingToken = true;
 
-  // Socket
   final SocketService _socketService = SocketService();
   StreamSubscription? _tokenSub;
+
+  bool _socketInitialized = false;
+  Timer? _debounceTimer;
+
+  String _s(String? v) => (v ?? "").toLowerCase().trim();
 
   @override
   void initState() {
     super.initState();
-    _initData();
-    _initSocket();
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _loadInitialData();
+    await _initSocket();
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _tokenSub?.cancel();
     _socketService.dispose();
     super.dispose();
   }
 
-  /// Initialize socket connection
-  void _initSocket() {
-    _socketService.init(userId: widget.staffId, roles: ['STAFF']);
-    _socketService.connect().then((_) {
-      _tokenSub = _socketService.tokenStream.listen((tokenData) {
-        debugPrint('🔔 Token Event: $tokenData');
-
-        if (tokenData['status'] == 'serving' ||
-            tokenData['status'] == 'waiting' ||
-            tokenData['status'] == 'skipped') {
-          _refreshTokens();
-        }
-      });
-    });
-  }
-
-  /// Load all initial data
-  Future<void> _initData() async {
+  Future<void> _loadInitialData() async {
     await Future.wait([
-      _loadBannersOnce(),
-      _checkCounterAssignedOnce(),
+      _loadBanners(),
+      _checkCounterAssigned(),
     ]);
 
     if (_counterAssigned) {
-      await _refreshTokens();
+      await _loadAllTokens();
     }
   }
 
-  /// Load banners once
-  Future<void> _loadBannersOnce() async {
-    setState(() => _loadingBanners = true);
+  Future<void> _loadBanners() async {
     try {
       final String? depId = (widget.departmentId.trim().isEmpty ||
               widget.departmentId.trim().toLowerCase() == "null")
           ? null
           : widget.departmentId.trim();
 
-      _banners = await BannerService.getUserBanners(
+      final banners = await BannerService.getUserBanners(
         role: "STAFF",
         departmentId: depId,
       );
 
-      debugPrint("🎯 BANNERS: ${_banners.map((b) => b.title).toList()}");
+      if (!mounted) return;
+      setState(() => _banners = banners);
     } catch (e) {
-      debugPrint("❌ Banner Error: $e");
-      _banners = [];
+      debugPrint("Banner load error: $e");
     } finally {
       if (mounted) setState(() => _loadingBanners = false);
     }
   }
 
-  /// Check if counter assigned
-  Future<void> _checkCounterAssignedOnce() async {
+  Future<void> _checkCounterAssigned() async {
     try {
       final counters =
           await CounterService.getUserCounters(staffId: widget.staffId);
-      _counterAssigned = counters.isNotEmpty;
+
+      if (!mounted) return;
+      setState(() => _counterAssigned = counters.isNotEmpty);
     } catch (e) {
-      debugPrint("Counter Error: $e");
-      _counterAssigned = false;
-    } finally {
-      if (mounted) setState(() {});
+      debugPrint("Counter check error: $e");
     }
   }
 
-  /// Refresh tokens & stats
-  Future<void> _refreshTokens() async {
-    await Future.wait([
-      _loadTokenStats(),
-      _loadCurrentToken(),
-    ]);
+  Future<void> _loadAllTokens() async {
+    try {
+      final tokens = await TokenService.getAllTokensOfStaffDetail();
+
+      if (!mounted) return;
+
+      _tokens = tokens;
+      _recalculateUI();
+    } catch (e) {
+      debugPrint("Token load error: $e");
+    }
   }
 
-  Future<void> _loadTokenStats() async {
+  Future<void> _initSocket() async {
+    if (_socketInitialized) return;
+    _socketInitialized = true;
+
+    _socketService.init(
+      userId: widget.staffId,
+      roles: ['staff'],
+    );
+
+    await _socketService.connect();
+
+    _tokenSub?.cancel();
+    _tokenSub = _socketService.tokenStream.listen(_onTokenEvent);
+  }
+
+  void _onTokenEvent(Map<String, dynamic> data) async {
     try {
-      setState(() => _loadingStats = true);
-      final stats = await TokenService.getTokenStats();
+      final tokens = await TokenService.getAllTokensOfStaffDetail();
 
       if (!mounted) return;
 
       setState(() {
-        _tokenStats = stats;
-        _loadingStats = false;
+        _tokens = tokens;
       });
+
+      _recalculateUI();
     } catch (e) {
-      debugPrint("Stats Error: $e");
-      if (mounted) setState(() => _loadingStats = false);
+      debugPrint("Token socket sync error: $e");
     }
   }
 
-  Future<void> _loadCurrentToken() async {
-    try {
-      setState(() => _loadingToken = true);
-      final token = await TokenService.fetchServingToken();
+  List<TokenModel> get _activeTokens {
+    final list = _tokens.where((t) {
+      final s = _s(t.status);
+      return s == "waiting" || s == "serving" || s == "called";
+    }).toList();
 
-      if (!mounted) return;
+    list.sort((a, b) {
+      final sa = _s(a.status);
+      final sb = _s(b.status);
 
-      setState(() => _currentToken = token);
-    } catch (e) {
-      debugPrint("Serving token error: $e");
-    } finally {
-      if (mounted) setState(() => _loadingToken = false);
-    }
+      if (sa == "serving") return -1;
+      if (sb == "serving") return 1;
+
+      if (a.isUrgent && !b.isUrgent) return -1;
+      if (!a.isUrgent && b.isUrgent) return 1;
+
+      return a.tokenNumber.compareTo(b.tokenNumber);
+    });
+
+    return list;
   }
 
-  /// Refresh everything (tokens + banners)
-  Future<void> _refreshAll() async {
-    await Future.wait([
-      _refreshTokens(),
-      _loadBannersOnce(),
-    ]);
+  void _applyCurrentToken() {
+    final serving = _activeTokens.where((t) {
+      final s = _s(t.status);
+      return s == "serving" || s == "called";
+    }).toList();
+
+    serving.sort((a, b) {
+      if (a.isUrgent && !b.isUrgent) return -1;
+      if (!a.isUrgent && b.isUrgent) return 1;
+      return a.tokenNumber.compareTo(b.tokenNumber);
+    });
+
+    _currentToken = serving.isNotEmpty ? serving.first : null;
+  }
+
+  TokenModel? _getNextToken() {
+    final waiting = _activeTokens.where((t) {
+      return _s(t.status) == "waiting";
+    }).toList();
+
+    waiting.sort((a, b) {
+      if (a.isUrgent && !b.isUrgent) return -1;
+      if (!a.isUrgent && b.isUrgent) return 1;
+      return a.tokenNumber.compareTo(b.tokenNumber);
+    });
+
+    return waiting.isNotEmpty ? waiting.first : null;
+  }
+
+  void _recalculateUI() {
+    _applyCurrentToken();
+    final next = _getNextToken();
+
+    setState(() {
+      _tokenStats = TokenStats(
+        currentToken: _currentToken?.tokenNumber.toString() ?? "-",
+        nextToken: next?.tokenNumber.toString() ?? "-",
+        waiting: _activeTokens.where((t) => _s(t.status) == "waiting").length,
+        servedToday: _tokens.where((t) => _s(t.status) == "completed").length,
+        urgentWaiting: _activeTokens
+            .where((t) => t.isUrgent && _s(t.status) == "waiting")
+            .length,
+        completed: _tokens.where((t) => _s(t.status) == "completed").length,
+        cancelled: _tokens.where((t) => _s(t.status) == "cancelled").length,
+        skipped: _tokens.where((t) => _s(t.status) == "skipped").length,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool hasDepartment = widget.departmentId.trim().isNotEmpty &&
+    final hasDepartment = widget.departmentId.trim().isNotEmpty &&
         widget.departmentId.trim().toLowerCase() != "null";
+
+    final TokenModel? preselectedToken = _currentToken ??
+        (_activeTokens.any(
+                (t) => _s(t.status) == "waiting" || _s(t.status) == "serving")
+            ? _activeTokens.firstWhere(
+                (t) => _s(t.status) == "waiting" || _s(t.status) == "serving",
+              )
+            : null);
 
     return Scaffold(
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Banner
             if (_loadingBanners)
-              const SizedBox(
-                  height: 150,
-                  child: Center(child: CircularProgressIndicator()))
+              const SizedBox(height: 150)
             else if (_banners.isNotEmpty)
               BannerSlider(banners: _banners),
-
             const SizedBox(height: 20),
-
-            // Admin card if no department or counter
             if (!hasDepartment || !_counterAssigned)
               AdminContactCard(
                 role: "STAFF",
@@ -204,18 +260,20 @@ class _StaffSectionState extends State<StaffSection> {
             else ...[
               CounterListWidget(staffId: widget.staffId),
               const SizedBox(height: 20),
-              _loadingStats
-                  ? const Center(child: CircularProgressIndicator())
-                  : TokenRows(),
+              TokenRows(
+                stats: _tokenStats,
+                currentToken: _currentToken,
+                allTokens: _tokens,
+              ),
               const SizedBox(height: 20),
-              if (_loadingToken)
-                const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: CircularProgressIndicator(),
-                ),
               TokenActionButtons(
                 staffId: widget.staffId,
-                onRefresh: _refreshAll,
+                currentToken: preselectedToken, // ✅ FIX HERE
+                tokens: _activeTokens,
+                onTokenChanged: (token) {
+                  _currentToken = token;
+                  _recalculateUI();
+                },
               ),
             ],
           ],

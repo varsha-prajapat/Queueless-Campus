@@ -158,7 +158,7 @@ export const completeTokenCtrl = async (req, res) => {
       });
     }
 
-    const token = await completeToken(tokenId, req.user.id, io);
+    const token = await completeToken(tokenId, io);
 
     res.json({
       success: true,
@@ -187,7 +187,7 @@ export const skipTokenCtrl = async (req, res) => {
       });
     }
 
-    const token = await skipToken(tokenId, req.user.id, io);
+    const token = await skipToken(tokenId, io);
 
     res.json({
       success: true,

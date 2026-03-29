@@ -1,108 +1,248 @@
 import 'package:flutter/material.dart';
-import '../../../services/socket_service.dart';
-import 'dart:async';
+import '../../../models/token_model.dart';
 
-class TokenCard extends StatefulWidget {
-  final String title;
-  final String tokenKey; // token field to display, e.g., "tokenNumber"
-  final bool isStaff; // true for staff, false for student
+/// ---------------- TOKEN STATS ----------------
+class TokenStats {
+  final String currentToken;
+  final String nextToken;
+  final int waiting;
+  final int servedToday;
+  final int urgentWaiting;
+  final int completed;
+  final int cancelled;
+  final int skipped;
 
-  const TokenCard({
-    super.key,
-    required this.title,
-    required this.tokenKey,
-    this.isStaff = false,
+  const TokenStats({
+    required this.currentToken,
+    required this.nextToken,
+    required this.waiting,
+    required this.servedToday,
+    this.urgentWaiting = 0,
+    this.completed = 0,
+    this.cancelled = 0,
+    this.skipped = 0,
   });
 
+  factory TokenStats.empty() {
+    return const TokenStats(
+      currentToken: "-",
+      nextToken: "-",
+      waiting: 0,
+      servedToday: 0,
+      urgentWaiting: 0,
+      completed: 0,
+      cancelled: 0,
+      skipped: 0,
+    );
+  }
+
   @override
-  State<TokenCard> createState() => _TokenCardState();
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TokenStats &&
+          currentToken == other.currentToken &&
+          nextToken == other.nextToken &&
+          waiting == other.waiting &&
+          servedToday == other.servedToday &&
+          urgentWaiting == other.urgentWaiting &&
+          completed == other.completed &&
+          cancelled == other.cancelled &&
+          skipped == other.skipped;
+
+  @override
+  int get hashCode =>
+      currentToken.hashCode ^
+      nextToken.hashCode ^
+      waiting.hashCode ^
+      servedToday.hashCode ^
+      urgentWaiting.hashCode ^
+      completed.hashCode ^
+      cancelled.hashCode ^
+      skipped.hashCode;
 }
 
-class _TokenCardState extends State<TokenCard> {
-  late final SocketService _socket;
-  String _displayValue = "-";
+/// ---------------- TOKEN ROWS ----------------
+class TokenRows extends StatelessWidget {
+  final TokenModel? currentToken;
+  final List<TokenModel> allTokens;
+  final String? counterId;
 
-  @override
-  void initState() {
-    super.initState();
-    _socket = SocketService();
+  const TokenRows({
+    super.key,
+    this.currentToken,
+    required this.allTokens,
+    this.counterId,
+  });
 
-    // Ensure socket is connected
-    if (!_socket.isConnected) {
-      _socket.connect();
+  TokenStats _calculateStats() {
+    final tokens = (counterId != null)
+        ? allTokens.where((t) => t.counterId == counterId).toList()
+        : allTokens;
+
+    if (tokens.isEmpty) {
+      return TokenStats.empty();
     }
 
-    // Listen to real-time notifications
-    _socketSub = _socket.notifStream.listen((events) {
-      _updateToken(events);
-    });
-  }
+    String normalize(String s) => s.toLowerCase();
 
-  StreamSubscription? _socketSub;
+    // ---------------- WAITING (FIXED) ----------------
+    final waitingTokens = tokens.where((t) {
+      final status = normalize(t.status);
+      return status == "waiting" || status == "waiting_payment";
+    }).toList();
 
-  @override
-  void dispose() {
-    _socketSub?.cancel();
-    super.dispose();
-  }
+    // ---------------- COMPLETED ----------------
+    final completedTokens = tokens.where((t) {
+      return normalize(t.status) == "completed";
+    }).toList();
 
-  /// Updates the display value based on socket events
-  void _updateToken(List<dynamic> events) {
-    String newValue = "-";
+    // ---------------- CANCELLED ----------------
+    final cancelledTokens = tokens.where((t) {
+      return normalize(t.status) == "cancelled";
+    }).toList();
 
-    for (var notif in events) {
-      if (notif is Map<String, dynamic>) {
-        if (widget.isStaff && notif['servingStaffId'] == _socket.userId) {
-          newValue = notif[widget.tokenKey]?.toString() ?? "-";
+    // ---------------- SKIPPED ----------------
+    final skippedTokens = tokens.where((t) {
+      return normalize(t.status) == "skipped";
+    }).toList();
 
-          // If token cancelled, show no token
-          if (notif['status'] == 'cancelled') newValue = "No Token";
-          break;
-        } else if (!widget.isStaff && notif['studentId'] == _socket.userId) {
-          newValue = notif[widget.tokenKey]?.toString() ?? "-";
+    // ---------------- URGENT WAITING (FIXED) ----------------
+    final urgentWaitingTokens =
+        waitingTokens.where((t) => t.isUrgent == true).toList();
 
-          if (notif['status'] == 'cancelled') newValue = "No Token";
-          break;
-        }
-      }
+    // ---------------- CURRENT TOKEN ----------------
+    final current = currentToken ??
+        tokens.firstWhere(
+          (t) =>
+              normalize(t.status) == "serving" ||
+              normalize(t.status) == "called",
+          orElse: () => TokenModel(id: "", tokenNumber: 0, status: "waiting"),
+        );
+
+    // ---------------- NEXT TOKEN (FIXED) ----------------
+    TokenModel nextTokenModel = TokenModel(
+      id: "",
+      tokenNumber: 0,
+      status: "waiting",
+    );
+
+    if (waitingTokens.isNotEmpty) {
+      final urgent = waitingTokens.where((t) => t.isUrgent == true).toList();
+      nextTokenModel = urgent.isNotEmpty ? urgent.first : waitingTokens.first;
     }
 
-    if (mounted) {
-      setState(() {
-        _displayValue =
-            (newValue.isEmpty || newValue == "-") ? "No Token" : newValue;
-      });
-    }
+    return TokenStats(
+      currentToken:
+          current.tokenNumber == 0 ? "-" : current.tokenNumber.toString(),
+      nextToken: nextTokenModel.tokenNumber == 0
+          ? "-"
+          : nextTokenModel.tokenNumber.toString(),
+      waiting: waitingTokens.length,
+      servedToday: completedTokens.length,
+      urgentWaiting: urgentWaitingTokens.length,
+      completed: completedTokens.length,
+      cancelled: cancelledTokens.length,
+      skipped: skippedTokens.length,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final stats = _calculateStats();
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: TokenCard(title: "Current", value: stats.currentToken),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TokenCard(title: "Next", value: stats.nextToken),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: TokenCard(
+                title: "Waiting",
+                value: stats.waiting.toString(),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TokenCard(
+                title: "Urgent Waiting",
+                value: stats.urgentWaiting.toString(),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: TokenCard(
+                title: "Served",
+                value: stats.completed.toString(),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TokenCard(
+                title: "Cancelled",
+                value: stats.cancelled.toString(),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TokenCard(
+                title: "Skipped",
+                value: stats.skipped.toString(),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// ---------------- TOKEN CARD ----------------
+class TokenCard extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const TokenCard({
+    super.key,
+    required this.title,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final displayValue = (value.isEmpty || value == "-") ? "No Token" : value;
+
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            Text(title, style: const TextStyle(color: Colors.grey)),
+            const SizedBox(height: 5),
             Text(
-              widget.title,
+              displayValue,
               style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 14,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _displayValue,
-              style: const TextStyle(
-                fontSize: 22,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),
-              textAlign: TextAlign.center,
             ),
           ],
         ),

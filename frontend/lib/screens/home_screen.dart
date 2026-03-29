@@ -34,8 +34,17 @@ class HomeScreenState extends State<HomeScreen> {
 
     final user = await UserService.getMe();
 
-    if (!SocketService().isConnected) {
-      await SocketService().connect();
+    final socket = SocketService();
+
+    // ✅ MOST IMPORTANT LINE
+    socket.init(
+      userId: user.id,
+      roles: [user.role.toUpperCase()], // MUST BE UPPERCASE
+    );
+
+    // ✅ then connect
+    if (!socket.isConnected) {
+      await socket.connect();
     }
 
     return user;

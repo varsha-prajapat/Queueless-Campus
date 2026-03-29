@@ -45,6 +45,8 @@ router.post("/token/complete", completeTokenCtrl);
 // ✅ NEW: Skip Token (Manual)
 router.post("/token/skip", skipTokenCtrl);
 
+router.get("/stats/detailed", getTokenStatsDetailedCtrl);
+
 /// =============================
 /// 📌 Get Admin Contact
 /// Example: GET /api/student/contact

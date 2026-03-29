@@ -1,17 +1,20 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../models/token_model.dart';
 import '../../../services/staff_service/token_service.dart';
-import '../../../services/socket_service.dart';
 
 class TokenActionButtons extends StatefulWidget {
   final String staffId;
-  final VoidCallback onRefresh;
+  final List<TokenModel> tokens;
+  final TokenModel? currentToken;
+
+  final Function(TokenModel? token)? onTokenChanged;
 
   const TokenActionButtons({
     super.key,
     required this.staffId,
-    required this.onRefresh,
+    required this.tokens,
+    this.currentToken,
+    this.onTokenChanged,
   });
 
   @override
@@ -19,292 +22,171 @@ class TokenActionButtons extends StatefulWidget {
 }
 
 class _TokenActionButtonsState extends State<TokenActionButtons> {
-  TokenModel? _servingToken;
-  int? _nextTokenNumber;
+  bool _loading = false;
 
-  bool _isCalling = false;
-  bool _isCompleting = false;
-  bool _isSkipping = false;
-  bool _isLoadingNext = false;
-
-  StreamSubscription? _socketSub;
-  late SocketService _socket;
+  TokenModel? _localCurrentToken;
 
   @override
   void initState() {
     super.initState();
-    _socket = SocketService();
-    _initLoad();
-    _initSocket();
+    _localCurrentToken = widget.currentToken;
   }
 
   @override
-  void dispose() {
-    _socketSub?.cancel();
-    _socket.dispose();
-    super.dispose();
+  void didUpdateWidget(covariant TokenActionButtons oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _localCurrentToken = widget.currentToken;
   }
 
-  /// ================= INITIAL LOAD =================
-  Future<void> _initLoad() async {
-    await _loadServingToken();
-    await _loadNextTokenPreview();
+  // ✅ WAITING only
+  TokenModel? get _waitingToken {
+    final list = widget.tokens.where((t) {
+      final status = (t.status ?? "").toLowerCase().trim();
+      return status == "waiting";
+    }).toList();
+
+    return list.isNotEmpty ? list.first : null;
   }
 
-  /// ================= SOCKET =================
-  void _initSocket() {
-    _socket.init(userId: widget.staffId, roles: ['staff']);
-    _socket.connect();
+  // ❌ FIXED (ONLY CHANGE HERE)
+  bool get _hasServing =>
+      _localCurrentToken != null &&
+      (_localCurrentToken!.status ?? "").toLowerCase().trim() == "serving";
 
-    _socketSub = _socket.notifStream.listen((event) async {
-      await _handleSocketEvent(event);
-    });
+  bool get _hasWaiting => _waitingToken != null;
 
-    _socket.on(
-        'token:called', (event) async => await _handleSocketEvent(event));
-    _socket.on(
-        'token:completed', (event) async => await _handleSocketEvent(event));
-    _socket.on(
-        'token:cancelled', (event) async => await _handleSocketEvent(event));
-  }
+  bool get _canCall => !_hasServing && _hasWaiting;
 
-  /// ================= HANDLE SOCKET =================
-  Future<void> _handleSocketEvent(dynamic event) async {
-    debugPrint('🔔 Token Socket Event: $event');
-
-    // Reload serving token & next token
-    await _loadServingToken();
-    await _loadNextTokenPreview();
-
-    // If the current token got cancelled, disable buttons
-    if (_servingToken != null && _servingToken!.status == 'cancelled') {
-      setState(() {
-        _isCalling = false;
-        _isCompleting = false;
-        _isSkipping = false;
-        _servingToken = null;
-      });
-    }
-  }
-
-  /// ================= SERVING TOKEN =================
-  Future<void> _loadServingToken() async {
-    try {
-      final token = await TokenService.fetchServingToken();
-      if (!mounted) return;
-
-      setState(() {
-        _servingToken = token;
-      });
-    } catch (e) {
-      debugPrint("Serving fetch error: $e");
-    }
-  }
-
-  /// ================= NEXT TOKEN =================
-  Future<void> _loadNextTokenPreview() async {
-    try {
-      setState(() => _isLoadingNext = true);
-
-      final nextTokenNumber = await TokenService.getNextTokenNumber();
-
-      if (!mounted) return;
-      setState(() {
-        _nextTokenNumber = nextTokenNumber;
-      });
-    } catch (e) {
-      debugPrint("Next token error: $e");
-    } finally {
-      if (mounted) setState(() => _isLoadingNext = false);
-    }
-  }
-
-  /// ================= CALL NEXT =================
-  Future<void> _callNext() async {
-    if (_isCalling || _servingToken != null) return;
-
-    setState(() => _isCalling = true);
-
-    try {
-      final result = await TokenService.callNextToken(widget.staffId);
-
-      if (result['success'] == true) {
-        await _loadServingToken();
-        widget.onRefresh();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Token No ${result['tokenNumber']} called"),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        _showError(result['message']);
-      }
-    } catch (e) {
-      _showError(e.toString());
-    } finally {
-      setState(() => _isCalling = false);
-      await _loadNextTokenPreview();
-    }
-  }
-
-  /// ================= COMPLETE =================
-  Future<void> _completeToken() async {
-    if (_servingToken == null || _isCompleting) return;
-
-    // Disable if cancelled
-    if (_servingToken!.status == 'cancelled') return;
-
-    setState(() => _isCompleting = true);
-    final tokenNumber = _servingToken!.tokenNumber;
-
-    try {
-      final result = await TokenService.completeToken(_servingToken!.id);
-
-      if (result['success'] == true) {
-        await _loadServingToken();
-        widget.onRefresh();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Token No $tokenNumber completed"),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        _showError(result['message']);
-      }
-    } catch (e) {
-      _showError(e.toString());
-    } finally {
-      setState(() => _isCompleting = false);
-      await _loadNextTokenPreview();
-    }
-  }
-
-  /// ================= SKIP =================
-  Future<void> _skipToken() async {
-    if (_servingToken == null || _isSkipping) return;
-
-    // Disable if cancelled
-    if (_servingToken!.status == 'cancelled') return;
-
-    setState(() => _isSkipping = true);
-    final tokenNumber = _servingToken!.tokenNumber;
-
-    try {
-      final result = await TokenService.skipToken(_servingToken!.id);
-
-      if (result['success'] == true) {
-        await _loadServingToken();
-        widget.onRefresh();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Token No $tokenNumber skipped"),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      } else {
-        _showError(result['message']);
-      }
-    } catch (e) {
-      _showError(e.toString());
-    } finally {
-      setState(() => _isSkipping = false);
-      await _loadNextTokenPreview();
-    }
-  }
-
-  /// ================= ERROR =================
-  void _showError(String? msg) {
+  void _showSuccess(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg ?? "Something went wrong"),
-        backgroundColor: Colors.red,
+        content: Text(msg),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
-  /// ================= BUTTON =================
-  Widget _button({
-    required String text,
-    required IconData icon,
-    required Color color,
-    required VoidCallback? onTap,
-  }) {
+  Future<void> _callNext() async {
+    if (_loading || !_canCall) return;
+
+    setState(() => _loading = true);
+
+    try {
+      final res = await TokenService.callNextToken(widget.staffId);
+
+      if (res['success'] == true) {
+        final next = _waitingToken;
+
+        _localCurrentToken = next;
+
+        _showSuccess("Token ${next?.tokenNumber ?? ''} called");
+
+        widget.onTokenChanged?.call(next);
+      }
+    } catch (e) {
+      debugPrint("Call error: $e");
+    }
+
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _complete() async {
+    if (_loading || _localCurrentToken == null) return;
+
+    setState(() => _loading = true);
+
+    try {
+      final res = await TokenService.completeToken(_localCurrentToken!.id);
+
+      if (res['success'] == true) {
+        _showSuccess("Token completed");
+
+        _localCurrentToken = null;
+
+        widget.onTokenChanged?.call(null);
+      }
+    } catch (e) {
+      debugPrint("Complete error: $e");
+    }
+
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _skip() async {
+    if (_loading || _localCurrentToken == null) return;
+
+    setState(() => _loading = true);
+
+    try {
+      final res = await TokenService.skipToken(_localCurrentToken!.id);
+
+      if (res['success'] == true) {
+        _showSuccess("Token skipped");
+
+        _localCurrentToken = null;
+
+        widget.onTokenChanged?.call(null);
+      }
+    } catch (e) {
+      debugPrint("Skip error: $e");
+    }
+
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Widget _btn(String text, VoidCallback? onTap, Color color) {
     return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
       width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: ElevatedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, color: Colors.white),
-        label: Text(text, style: const TextStyle(color: Colors.white)),
+      height: 48,
+      child: ElevatedButton(
+        onPressed: _loading ? null : onTap,
         style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 14),
           backgroundColor: color,
-          disabledBackgroundColor: color.withOpacity(0.4),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
+        child: _loading
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Text(
+                text,
+                style: const TextStyle(color: Colors.white), // ✅ ALL TEXT WHITE
+              ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isServing = _servingToken != null;
-    final bool tokenCancelled = _servingToken?.status == 'cancelled';
-
     return Column(
       children: [
-        /// COMPLETE
-        _button(
-          text: _isCompleting
-              ? "Completing..."
-              : isServing
-                  ? "Complete ${_servingToken!.tokenNumber}"
-                  : "Complete",
-          icon: Icons.check_circle,
-          color: Colors.green,
-          onTap: (!tokenCancelled && isServing && !_isCompleting)
-              ? _completeToken
-              : null,
-        ),
-
-        /// SKIP
-        _button(
-          text: _isSkipping
-              ? "Skipping..."
-              : isServing
-                  ? "Skip ${_servingToken!.tokenNumber}"
-                  : "Skip",
-          icon: Icons.skip_next,
-          color: Colors.orange,
-          onTap: (!tokenCancelled && isServing && !_isSkipping)
-              ? _skipToken
-              : null,
-        ),
-
-        /// CALL NEXT
-        _button(
-          text: _isCalling
-              ? "Calling..."
-              : _isLoadingNext
-                  ? "Loading..."
-                  : _nextTokenNumber != null
-                      ? "Call $_nextTokenNumber"
-                      : "No Tokens",
-          icon: Icons.campaign,
-          color: (!isServing && _nextTokenNumber != null)
-              ? Colors.deepPurple
-              : Colors.deepPurple.shade200,
-          onTap: (!isServing &&
-                  !_isCalling &&
-                  _nextTokenNumber != null &&
-                  !tokenCancelled)
-              ? _callNext
-              : null,
-        ),
+        if (_hasServing) ...[
+          _btn("Complete Token", _complete, const Color(0xFF2E7D32)),
+          _btn("Skip Token", _skip, const Color(0xFFF57C00)),
+        ],
+        if (_canCall)
+          _btn(
+            "Call ${_waitingToken!.tokenNumber}",
+            _callNext,
+            const Color(0xFF0D47A1), // ✅ DARK BLUE
+          ),
+        if (!_hasServing && !_hasWaiting)
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: Text(
+              "No tokens available",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
       ],
     );
   }
