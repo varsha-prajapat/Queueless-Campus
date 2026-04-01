@@ -19,6 +19,8 @@ class _BottomNavState extends State<BottomNav> {
   static const Color primary = Color(0xFF1F5F5B);
   static const Color bgLight = Color(0xFFF6FAF9);
 
+  bool _initialized = false;
+
   final List<Widget> screens = const [
     HomeScreen(),
     NotificationScreen(),
@@ -26,60 +28,69 @@ class _BottomNavState extends State<BottomNav> {
   ];
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_initialized) return;
+
+    final provider = Provider.of<NotificationProvider>(context, listen: false);
+    provider.initSocketListener();
+
+    _initialized = true;
+  }
+
+  void _handleTabChange(int newIndex) async {
+    final provider = Provider.of<NotificationProvider>(context, listen: false);
+
+    final previousIndex = index;
+
+    setState(() {
+      index = newIndex;
+    });
+
+    // ✅ FIX: CALL WHEN LEAVING NOTIFICATION SCREEN
+    if (previousIndex == 1 && newIndex != 1) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      provider.markAllAsRead();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer<NotificationProvider>(
       builder: (context, provider, child) {
+        final unread = provider.unreadCount;
+
         return Scaffold(
           backgroundColor: bgLight,
           body: IndexedStack(
             index: index,
             children: screens,
           ),
-          bottomNavigationBar: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: primary.withOpacity(0.12),
-                  blurRadius: 20,
-                  offset: const Offset(0, -6),
-                ),
-              ],
-            ),
-            child: BottomNavigationBar(
-              currentIndex: index,
-              onTap: (i) async {
-                // mark read when leaving notification tab
-                if (index == 1 && i != 1) {
-                  await provider.markAllRead();
-                }
-
-                setState(() {
-                  index = i;
-                });
-              },
-              type: BottomNavigationBarType.fixed,
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              selectedItemColor: primary,
-              unselectedItemColor: Colors.grey.shade400,
-              items: [
-                _navItem(
-                  label: "Home",
-                  icon: Icons.dashboard_outlined,
-                  active: index == 0,
-                ),
-                _notificationItem(
-                  active: index == 1,
-                  count: provider.unreadCount,
-                ),
-                _navItem(
-                  label: "Settings",
-                  icon: Icons.settings_outlined,
-                  active: index == 2,
-                ),
-              ],
-            ),
+          bottomNavigationBar: BottomNavigationBar(
+            currentIndex: index,
+            onTap: _handleTabChange,
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: Colors.white,
+            elevation: 10,
+            selectedItemColor: primary,
+            unselectedItemColor: Colors.grey.shade400,
+            items: [
+              _navItem(
+                label: "Home",
+                icon: Icons.dashboard_outlined,
+                active: index == 0,
+              ),
+              _notificationItem(
+                active: index == 1,
+                count: unread,
+              ),
+              _navItem(
+                label: "Settings",
+                icon: Icons.settings_outlined,
+                active: index == 2,
+              ),
+            ],
           ),
         );
       },
@@ -109,6 +120,14 @@ class _BottomNavState extends State<BottomNav> {
     required bool active,
     required int count,
   }) {
+    String badgeText = "";
+
+    if (count > 0 && count <= 5) {
+      badgeText = count.toString();
+    } else if (count > 5) {
+      badgeText = "5+";
+    }
+
     return BottomNavigationBarItem(
       label: "Alerts",
       icon: Stack(
@@ -123,8 +142,6 @@ class _BottomNavState extends State<BottomNav> {
             ),
             child: const Icon(Icons.notifications_outlined),
           ),
-
-          // 🔥 BADGE
           if (count > 0)
             Positioned(
               right: -4,
@@ -139,7 +156,7 @@ class _BottomNavState extends State<BottomNav> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  count > 5 ? "5+" : count.toString(),
+                  badgeText,
                   style: const TextStyle(
                     fontSize: 10,
                     color: Colors.white,

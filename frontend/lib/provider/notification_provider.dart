@@ -1,96 +1,155 @@
-import 'package:flutter/material.dart';
-import '../shared/services/notification_service.dart';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+
 import '../services/socket_service.dart';
+import '../models/notification_model.dart';
+import '../shared/services/notification_service.dart';
 
-class NotificationProvider extends ChangeNotifier {
-  final NotificationService _service = NotificationService();
-  final SocketService _socket = SocketService();
+class NotificationProvider with ChangeNotifier {
+  final SocketService _socketService = SocketService();
+  final NotificationService _api = NotificationService();
 
+  List<NotificationModel> notifications = [];
   int unreadCount = 0;
-  bool _socketInitialized = false;
 
-  List<dynamic> notifications = [];
+  StreamSubscription? _notifSub;
 
-  // ----------------- CONSTRUCTOR -----------------
-  NotificationProvider() {
-    _init(); // 🔥 AUTO START EVERYTHING
-  }
+  // ✅ INTERNAL SAFE FLAG
+  bool _isInitialized = false;
 
-  // ----------------- INIT -----------------
-  Future<void> _init() async {
-    await fetchUnread(); // 🔥 load badge first
-    await fetchNotifications(); // optional list load
-    _initSocket(); // 🔥 real-time updates
+  // ----------------- INIT (ADD THIS) -----------------
+  Future<void> init() async {
+    if (_isInitialized) return;
+    _isInitialized = true;
+
+    await refresh(); // 🔥 load old unread + notifications first
+
+    initSocketListener(); // 🔥 then start socket listener
   }
 
   // ----------------- SOCKET LISTENER -----------------
-  void _initSocket() {
-    if (_socketInitialized) return;
-    _socketInitialized = true;
+  void initSocketListener() {
+    _notifSub ??= _socketService.notifStream.listen((data) async {
+      if (data == null) return;
 
-    _socket.notifStream.listen((data) {
-      print("📡 SOCKET NOTIF: $data");
+      print("📩 SOCKET EVENT: $data");
 
-      // add new notification
-      notifications.insert(0, data);
+      final type = data['type'];
 
-      // increase unread badge
-      unreadCount++;
+      if (type == null) {
+        await refresh();
+        return;
+      }
 
-      notifyListeners();
+      switch (type) {
+        // ---------------- NEW NOTIFICATION ----------------
+        case 'notification:new':
+          unreadCount++;
+          notifyListeners();
+          break;
+
+        // ---------------- SINGLE READ ----------------
+        case 'notification:read':
+          unreadCount = (unreadCount > 0) ? unreadCount - 1 : 0;
+          notifyListeners();
+          break;
+
+        // ---------------- MARK ALL READ ----------------
+        case 'notification:read_all':
+          unreadCount = 0;
+          notifyListeners();
+          break;
+
+        // ---------------- DELETE ----------------
+        case 'notification:delete':
+        case 'notification:delete_all':
+          await refresh();
+          break;
+
+        default:
+          await refresh();
+          break;
+      }
     });
   }
 
-  // ----------------- FETCH ALL NOTIFICATIONS -----------------
-  Future<void> fetchNotifications() async {
+  // ----------------- REFRESH -----------------
+  Future<void> refresh() async {
     try {
-      final data = await _service.fetchNotifications();
+      await Future.wait([
+        fetchNotifications(),
+        fetchUnreadCount(),
+      ]);
 
-      notifications = data;
       notifyListeners();
     } catch (e) {
-      print("❌ fetchNotifications error: $e");
+      print("⚠️ refresh error: $e");
     }
   }
 
-  // ----------------- FETCH UNREAD COUNT -----------------
-  Future<void> fetchUnread() async {
+  // ----------------- FETCH NOTIFICATIONS -----------------
+  Future<void> fetchNotifications() async {
     try {
-      unreadCount = await _service.getUnreadCount();
-
-      print("📥 Unread loaded: $unreadCount");
-
-      notifyListeners();
+      final res = await _api.fetchNotifications();
+      notifications = res;
     } catch (e) {
-      print("❌ fetchUnread error: $e");
+      print("⚠️ fetchNotifications error: $e");
+    }
+  }
+
+  // ----------------- FETCH UNREAD -----------------
+  Future<void> fetchUnreadCount() async {
+    try {
+      final count = await _api.getUnreadCount();
+      unreadCount = count;
+
+      print("📊 Unread Count: $unreadCount");
+    } catch (e) {
+      print("⚠️ fetchUnreadCount error: $e");
     }
   }
 
   // ----------------- MARK ALL READ -----------------
-  Future<void> markAllRead() async {
-    final success = await _service.markAsReadALL();
+  Future<void> markAllAsRead() async {
+    try {
+      await _api.markAsReadALL();
 
-    if (success) {
-      unreadCount = 0;
-
-      // mark all local as read
-      for (var n in notifications) {
-        n['read'] = true;
-      }
-
-      notifyListeners();
+      // 🔥 just refresh everything properly
+      await refresh();
+    } catch (e) {
+      print("⚠️ markAllAsRead error: $e");
     }
   }
 
-  // ----------------- MANUAL INCREASE (DEBUG) -----------------
-  void increase() {
-    unreadCount++;
-    notifyListeners();
+  // ----------------- DELETE ONE -----------------
+  Future<void> deleteNotification(String id, String type) async {
+    try {
+      await _api.deleteNotification(id, type);
+      await refresh();
+    } catch (e) {
+      print("⚠️ deleteNotification error: $e");
+    }
   }
 
-  // ----------------- RESET -----------------
-  void reset() {
-    unreadCount = 0;
-    notifyListeners();
+  // ----------------- DELETE ALL -----------------
+  Future<void> deleteAll() async {
+    try {
+      await _api.deleteAllNotifications();
+
+      unreadCount = 0;
+      notifyListeners();
+
+      await refresh();
+    } catch (e) {
+      print("⚠️ deleteAll error: $e");
+    }
+  }
+
+  // ----------------- DISPOSE -----------------
+  @override
+  void dispose() {
+    _notifSub?.cancel();
+    _isInitialized = false;
+    super.dispose();
   }
 }

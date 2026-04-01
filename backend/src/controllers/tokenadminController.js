@@ -1,44 +1,88 @@
+import Counter from "../models/counterModel.js";
 import Token from "../models/tokenModel.js";
 
-/// ================= GET ADMIN DASHBOARD TOKEN INFO =================
-export const getAdminDashboardInfoToken = async (req, res) => {
+/* ================= ADMIN QUEUE SERVICE ================= */
+export const getAdminQueueDetailsService = async (io = null) => {
   try {
-    const data = await Token.aggregate([
-      {
-        $group: {
-          _id: "$counterId",
+    const counters = await Counter.find({ isActive: true }).lean();
 
-          waiting: {
-            $sum: {
-              $cond: [{ $eq: ["$status", "waiting"] }, 1, 0],
-            },
-          },
+    const result = [];
 
-          serving: {
-            $sum: {
-              $cond: [{ $eq: ["$status", "serving"] }, 1, 0],
-            },
-          },
+    // 🔥 GLOBAL STATS
+    let totalWaiting = 0;
+    let totalServing = 0;
+    let totalCompleted = 0;
+    let totalCancelled = 0;
+    let totalSkipped = 0;
 
-          paymentPending: {
-            $sum: {
-              $cond: [{ $eq: ["$status", "waiting_payment"] }, 1, 0],
-            },
-          },
+    for (const counter of counters) {
+      const tokens = await Token.find({
+        counterId: counter._id,
+      })
+        .populate("studentId", "name email")
+        .populate("serviceId", "name fee")
+        .sort({ isUrgent: -1, createdAt: 1 })
+        .lean();
+
+      const waiting = tokens.filter((t) => t.status === "waiting").length;
+      const serving = tokens.find((t) => t.status === "serving") || null;
+      const completed = tokens.filter((t) => t.status === "completed").length;
+      const cancelled = tokens.filter((t) => t.status === "cancelled").length;
+      const skipped = tokens.filter((t) => t.status === "skipped").length;
+
+      // GLOBAL SUM
+      totalWaiting += waiting;
+      totalServing += serving ? 1 : 0;
+      totalCompleted += completed;
+      totalCancelled += cancelled;
+      totalSkipped += skipped;
+
+      result.push({
+        counterId: counter._id,
+        counterName: counter.name,
+
+        summary: {
+          waiting,
+          serving: serving?.tokenNumber || "-",
+          completed,
+          cancelled,
+          skipped,
         },
-      },
-    ]);
 
-    return res.json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    console.error("Admin dashboard token stats error:", error.message);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch dashboard token stats",
-      error: error.message,
-    });
+        currentToken: serving
+          ? {
+              tokenId: serving._id,
+              tokenNumber: serving.tokenNumber,
+              student: serving.studentId,
+              service: serving.serviceId,
+              status: serving.status,
+              servingStartedAt: serving.servingStartedAt,
+            }
+          : null,
+
+        queue: tokens,
+      });
+    }
+
+    const response = {
+      globalStats: {
+        totalWaiting,
+        totalServing,
+        totalCompleted,
+        totalCancelled,
+        totalSkipped,
+      },
+      counters: result,
+    };
+
+    // 📡 REAL-TIME EMIT
+    if (io) {
+      io.to("role_ADMIN").emit("admin:queue:update", response);
+    }
+
+    return response;
+  } catch (err) {
+    console.error("❌ Admin Queue Service Error:", err.message);
+    throw err;
   }
 };

@@ -30,6 +30,11 @@ class _AdminContactCardState extends State<AdminContactCard> {
     _adminFuture = AdminContactService.getAdminContact(role: widget.role);
   }
 
+  /// ✅ SAFE IMAGE CHECK
+  bool _hasValidImage(String? url) {
+    return url != null && url.trim().isNotEmpty && url.startsWith("http");
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool hasDepartment = widget.departmentId != null &&
@@ -63,7 +68,7 @@ class _AdminContactCardState extends State<AdminContactCard> {
 
         final admin = snapshot.data!;
 
-        /// 🔥 CASE 1: Department missing
+        /// ================= CASE 1: NO DEPARTMENT =================
         if (!hasDepartment) {
           return _buildAdminCard(
             admin,
@@ -72,17 +77,16 @@ class _AdminContactCardState extends State<AdminContactCard> {
           );
         }
 
-        /// 🔥 CASE 2: Counter missing
+        /// ================= CASE 2: COUNTER INACTIVE =================
         if (!hasCounter) {
           return _buildAdminCard(
             admin,
-            message:
-                "⚠ You do not have a counter assigned yet. Please contact administrator.",
+            message: "⚠ Contact admin to activate your counter.",
             showDepartment: true,
           );
         }
 
-        /// ✅ CASE 3: Everything OK → optional staff card
+        /// ================= CASE 3: ACTIVE =================
         return _buildStaffCard(admin);
       },
     );
@@ -97,60 +101,43 @@ class _AdminContactCardState extends State<AdminContactCard> {
       decoration: BoxDecoration(
         color: Colors.lightBlue.shade50,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.lightBlue.shade100,
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          /// Avatar
+          /// 🔥 SAFE AVATAR (ICON FALLBACK FIXED)
           CircleAvatar(
             radius: 30,
             backgroundColor: Colors.lightBlue.shade100,
-            backgroundImage: admin.profileImage != null
+            backgroundImage: _hasValidImage(admin.profileImage)
                 ? NetworkImage(admin.profileImage!)
                 : null,
-            child: admin.profileImage == null
+            child: !_hasValidImage(admin.profileImage)
                 ? const Icon(Icons.person, size: 30, color: Colors.lightBlue)
                 : null,
           ),
 
           const SizedBox(height: 12),
 
-          /// Title
-          Text(
+          const Text(
             "Contact Administrator",
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.lightBlue.shade800,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
 
           const SizedBox(height: 6),
 
-          /// Department info
           Text(
             showDepartment
                 ? "Department ID: ${widget.departmentId}"
                 : "No department assigned",
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 13),
           ),
 
           const SizedBox(height: 12),
 
-          /// Warning message
           _buildMessageBanner(message),
 
           const SizedBox(height: 12),
 
-          /// Admin details
           ..._buildAdminInfo(admin),
         ],
       ),
@@ -185,13 +172,11 @@ class _AdminContactCardState extends State<AdminContactCard> {
     return [
       const Divider(),
       _buildInfoRow(Icons.person, admin.name ?? "Admin"),
-      const SizedBox(height: 6),
       _buildClickableInfoRow(
         Icons.email,
         admin.email ?? "N/A",
         "mailto:${admin.email}",
       ),
-      const SizedBox(height: 6),
       _buildClickableInfoRow(
         Icons.phone,
         admin.phone ?? "N/A",
@@ -200,7 +185,6 @@ class _AdminContactCardState extends State<AdminContactCard> {
     ];
   }
 
-  /// ================= UI HELPERS =================
   Widget _buildMessageBanner(String message) {
     return Container(
       padding: const EdgeInsets.all(10),

@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/notification_model.dart';
-import '../../services/socket_service.dart';
-import '../services/notification_service.dart';
 import '../../utils/auth_role_helper.dart';
+import '../../provider/notification_provider.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -15,12 +15,7 @@ class NotificationScreen extends StatefulWidget {
 }
 
 class _NotificationScreenState extends State<NotificationScreen> {
-  final NotificationService _service = NotificationService();
-
-  final List<NotificationModel> notifications = [];
   final Map<String, Timer> _expiryTimers = {};
-
-  StreamSubscription<Map<String, dynamic>>? _notifSub;
 
   bool loading = true;
   String? userId;
@@ -36,86 +31,20 @@ class _NotificationScreenState extends State<NotificationScreen> {
     userId = await AuthRoleHelper.getUserId();
     userRole = await AuthRoleHelper.getRole();
 
-    await _fetchNotifications();
+    final provider = Provider.of<NotificationProvider>(context, listen: false);
 
-    // ✅ SAFE SOCKET CONNECT
-    if (!SocketService().isConnected) {
-      await SocketService().connect();
-    }
+    // ✅ ONLY FETCH DATA
+    await provider.refresh();
 
-    // ✅ FIX: avoid multiple listeners
-    await _notifSub?.cancel();
-
-    _notifSub = SocketService().notifStream.listen((data) {
-      if (!mounted) return;
-
-      try {
-        final notif = NotificationModel.fromJson(data);
-
-        // ---------------- FILTER ----------------
-        if (notif.hiddenFor?.contains(userId) ?? false) return;
-
-        if (notif.roles != null && notif.roles!.isNotEmpty) {
-          if (!notif.roles!.contains("ALL")) {
-            if (userRole == null || !notif.roles!.contains(userRole)) {
-              return;
-            }
-          }
-        }
-
-        // ---------------- UPDATE LIST ----------------
-        setState(() {
-          final index = notifications.indexWhere((n) => n.id == notif.id);
-
-          if (index >= 0) {
-            notifications[index] = notif;
-          } else {
-            notifications.insert(0, notif);
-          }
-        });
-
-        _setupExpiryTimers();
-      } catch (e) {
-        debugPrint("❌ Socket parse error: $e");
-      }
-    });
-  }
-
-  Future<void> _fetchNotifications() async {
-    setState(() => loading = true);
-
-    try {
-      final fetched = await _service.fetchNotifications();
-
-      if (!mounted) return;
-
-      final filtered = fetched.where((n) {
-        if (n.hiddenFor?.contains(userId) ?? false) return false;
-
-        if (n.roles == null || n.roles!.isEmpty) return true;
-        if (n.roles!.contains("ALL")) return true;
-        if (userRole != null && n.roles!.contains(userRole)) return true;
-
-        return false;
-      }).toList();
-
-      setState(() {
-        notifications
-          ..clear()
-          ..addAll(filtered);
-      });
-
-      _setupExpiryTimers();
-    } catch (e) {
-      debugPrint("❌ Notification fetch error: $e");
-    }
+    // ❌ REMOVED:
+    // await provider.markAllAsRead();
 
     if (mounted) {
       setState(() => loading = false);
     }
   }
 
-  void _setupExpiryTimers() {
+  void _setupExpiryTimers(List<NotificationModel> notifications) {
     for (var t in _expiryTimers.values) {
       t.cancel();
     }
@@ -126,52 +55,32 @@ class _NotificationScreenState extends State<NotificationScreen> {
     for (var notif in notifications.toList()) {
       if (notif.expiresAt == null) continue;
 
-      if (notif.expiresAt!.isBefore(now)) {
-        notifications.removeWhere((n) => n.id == notif.id);
-        continue;
-      }
+      if (notif.expiresAt!.isBefore(now)) continue;
 
       final diff = notif.expiresAt!.difference(now);
 
       _expiryTimers[notif.id] = Timer(diff, () {
         if (!mounted) return;
 
-        setState(() {
-          notifications.removeWhere((n) => n.id == notif.id);
-        });
+        final provider =
+            Provider.of<NotificationProvider>(context, listen: false);
 
-        _expiryTimers.remove(notif.id);
+        provider.refresh(); // only expiry update
       });
     }
   }
 
-  Future<void> _deleteNotification(String id, {String type = "SKIPPED"}) async {
-    final success = await _service.deleteNotification(id, type);
+  Future<void> _deleteNotification(String id) async {
+    final provider = Provider.of<NotificationProvider>(context, listen: false);
 
-    if (success && mounted) {
-      setState(() {
-        notifications.removeWhere((n) => n.id == id);
-      });
-
-      _expiryTimers[id]?.cancel();
-      _expiryTimers.remove(id);
-    }
+    await provider.deleteNotification(id, "SKIPPED");
   }
 
   Future<void> _deleteAllNotifications() async {
-    final success = await _service.deleteAllNotifications();
+    final provider = Provider.of<NotificationProvider>(context, listen: false);
 
-    if (success && mounted) {
-      setState(() => notifications.clear());
-
-      for (var t in _expiryTimers.values) {
-        t.cancel();
-      }
-      _expiryTimers.clear();
-    }
+    await provider.deleteAll();
   }
-
-  // ================= UI (UNCHANGED) =================
 
   Widget _buildNotificationCard(NotificationModel notif) {
     final bool isRead = notif.isRead;
@@ -179,16 +88,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
     return Dismissible(
       key: Key(notif.id),
       direction: DismissDirection.endToStart,
-      onDismissed: (_) => _deleteNotification(notif.id, type: "SKIPPED"),
-      background: Container(
-        padding: const EdgeInsets.only(right: 20),
-        alignment: Alignment.centerRight,
-        decoration: BoxDecoration(
-          color: Colors.red,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: const Icon(Icons.delete, color: Colors.white),
-      ),
+      onDismissed: (_) => _deleteNotification(notif.id),
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
@@ -204,8 +104,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(notif.title,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    notif.title,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   Text(notif.message),
                   if (notif.expiresAt != null)
                     Text(
@@ -228,41 +130,45 @@ class _NotificationScreenState extends State<NotificationScreen> {
 
   @override
   void dispose() {
-    _notifSub?.cancel();
-
     for (var t in _expiryTimers.values) {
       t.cancel();
     }
-
     _expiryTimers.clear();
-
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Notifications"),
-        actions: [
-          if (notifications.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.delete_outline),
-              onPressed: _deleteAllNotifications,
-            ),
-        ],
-      ),
-      body: loading
-          ? const Center(child: CircularProgressIndicator())
-          : notifications.isEmpty
-              ? const Center(child: Text("No notifications"))
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: notifications.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) =>
-                      _buildNotificationCard(notifications[i]),
+    return Consumer<NotificationProvider>(
+      builder: (context, provider, _) {
+        final notifications = provider.notifications;
+
+        _setupExpiryTimers(notifications);
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text("Notifications"),
+            actions: [
+              if (notifications.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: _deleteAllNotifications,
                 ),
+            ],
+          ),
+          body: loading
+              ? const Center(child: CircularProgressIndicator())
+              : notifications.isEmpty
+                  ? const Center(child: Text("No notifications"))
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: notifications.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (_, i) =>
+                          _buildNotificationCard(notifications[i]),
+                    ),
+        );
+      },
     );
   }
 }

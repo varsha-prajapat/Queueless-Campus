@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 
 import './provider/profile_provider.dart';
 import './provider/TokenProvider.dart';
-import './provider/notification_provider.dart'; // ✅ ADDED FIX
+import './provider/notification_provider.dart';
 
 import "./services/socket_service.dart";
 import 'routes/app_routes.dart';
@@ -14,25 +14,32 @@ import "./utils/auth_role_helper.dart";
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Fetch user info
+  // ----------------- USER DATA -----------------
   final userId = await AuthRoleHelper.getUserId();
   final rolesString = await AuthRoleHelper.getRole();
+
   final roles =
       rolesString.contains(',') ? rolesString.split(',') : [rolesString];
 
   print("🚀 App starting with userId: $userId, roles: $roles");
 
-  // Initialize global socket service
+  // ----------------- SOCKET INIT (GLOBAL ONLY) -----------------
   final socketService = SocketService();
-  socketService.init(userId: userId, roles: roles);
 
-  // Connect once globally
+  socketService.init(
+    userId: userId,
+    roles: roles.map((e) => e.toUpperCase()).toList(),
+  );
+
   await socketService.connect();
   print("✅ Socket connected globally");
 
   runApp(const MyApp());
 }
 
+// =======================================================
+// APP ROOT
+// =======================================================
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -50,6 +57,7 @@ class _MyAppState extends State<MyApp> {
     _initDeepLinks();
   }
 
+  // ----------------- DEEP LINKS -----------------
   Future<void> _initDeepLinks() async {
     try {
       final Uri? initialUri = await _appLinks.getInitialLink();
@@ -61,6 +69,7 @@ class _MyAppState extends State<MyApp> {
           debugPrint('Deep link error: $err');
         },
       );
+
       print("✅ Deep link listener initialized");
     } catch (e) {
       debugPrint('Failed to init deep links: $e');
@@ -90,6 +99,9 @@ class _MyAppState extends State<MyApp> {
     print("🛑 App disposed, deep link subscription cancelled");
   }
 
+  // =======================================================
+  // BUILD
+  // =======================================================
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -102,9 +114,9 @@ class _MyAppState extends State<MyApp> {
           create: (_) => TokenProvider(),
         ),
 
-        // ✅ FIXED: NotificationProvider added
+        // ----------------- NOTIFICATION PROVIDER -----------------
         ChangeNotifierProvider(
-          create: (_) => NotificationProvider(),
+          create: (_) => NotificationProvider()..init(), // 🔥 IMPORTANT FIX
         ),
       ],
       child: MaterialApp(

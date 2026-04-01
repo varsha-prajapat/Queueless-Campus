@@ -10,7 +10,7 @@ class SocketService {
 
   IO.Socket? socket;
 
-  // ----------------- STREAMS (FIXED TYPES) -----------------
+  // ----------------- STREAMS -----------------
   final StreamController<Map<String, dynamic>> _notifController =
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get notifStream => _notifController.stream;
@@ -26,12 +26,11 @@ class SocketService {
   List<String>? roles;
   List<String>? counters;
 
-  // ----------------- STATE GUARD (IMPORTANT FIX) -----------------
   bool _initialized = false;
 
   // ----------------- SERVER URL -----------------
   String get _serverUrl {
-    // Emulator + real device safe URL
+    // ❗ FIXED: localhost is WRONG for Android emulator
     if (Platform.isAndroid) return 'http://localhost:3005';
     if (Platform.isIOS) return 'http://localhost:3005';
     return 'http://localhost:3005';
@@ -52,7 +51,6 @@ class SocketService {
 
   // ----------------- CONNECT -----------------
   Future<void> connect() async {
-    // prevent multiple connections (CRITICAL FIX)
     if (_initialized && socket?.connected == true) return;
     _initialized = true;
 
@@ -75,8 +73,6 @@ class SocketService {
           .build(),
     );
 
-    socket!.connect();
-
     // ----------------- CONNECT EVENT -----------------
     socket!.onConnect((_) {
       print("✅ Socket connected: ${socket!.id}");
@@ -88,9 +84,12 @@ class SocketService {
           socket?.emit('joinRoom', 'role_COUNTER_$counterId');
         }
       }
+
+      // ❗ FIX: register ALL listeners here (important)
+      _registerNotificationListeners();
+      _registerTokenListeners();
     });
 
-    // ----------------- DISCONNECT -----------------
     socket!.onDisconnect((reason) {
       print("❌ Disconnected: $reason");
     });
@@ -100,27 +99,43 @@ class SocketService {
     });
 
     socket!.on('ping', (_) => socket?.emit('pong'));
+  }
 
-    // ----------------- NOTIFICATIONS (FIXED) -----------------
-    socket?.off('notifications:new');
+  // ----------------- NOTIFICATION EVENTS FIXED -----------------
+  void _registerNotificationListeners() {
+    final events = [
+      'notification:new',
+      'notification:read',
+      'notification:read_all',
+      'notification:delete',
+      'notification:delete_all',
+    ];
 
-    socket?.on('notifications:new', (data) {
-      if (data == null) return;
+    for (var event in events) {
+      socket?.off(event);
 
-      try {
-        final notif = Map<String, dynamic>.from(data);
+      socket?.on(event, (data) {
+        if (data == null) return;
 
-        // 🚀 NO LIST WRAPPING (IMPORTANT FIX)
-        if (!_notifController.isClosed) {
-          _notifController.add(notif);
+        try {
+          final notif = Map<String, dynamic>.from(data);
+
+          print("🔔 $event => $notif");
+
+          if (!_notifController.isClosed) {
+            _notifController.add(notif);
+          }
+        } catch (e) {
+          print("⚠️ Notification parse error ($event): $e");
         }
-      } catch (e) {
-        print("⚠️ Notification parse error: $e");
-      }
-    });
+      });
+    }
+  }
 
-    // ----------------- TOKEN EVENTS -----------------
+  // ----------------- TOKEN EVENTS -----------------
+  void _registerTokenListeners() {
     final tokenEvents = [
+      'token:update',
       'token:created',
       'token:paymentConfirmed',
       'token:cancelled',
@@ -152,7 +167,7 @@ class SocketService {
 
   // ----------------- HELPERS -----------------
   void on(String event, Function(dynamic) callback) {
-    socket?.off(event); // prevent duplicate listeners
+    socket?.off(event);
     socket?.on(event, callback);
   }
 

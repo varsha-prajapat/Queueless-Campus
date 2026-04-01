@@ -8,6 +8,8 @@ import '../../auth/services/auth_storage.dart';
 import '../../models/user_model.dart';
 import '../screens/home/widgets/sections/staff_section.dart';
 import '../screens/home/widgets/sections/student_section.dart';
+import "../provider/notification_provider.dart";
+import 'package:provider/provider.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,11 +20,17 @@ class HomeScreen extends StatefulWidget {
 
 class HomeScreenState extends State<HomeScreen> {
   late Future<UserModel> _future;
-
   @override
   void initState() {
     super.initState();
     _future = _init();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<NotificationProvider>(
+        context,
+        listen: false,
+      ).init();
+    });
   }
 
   Future<UserModel> _init() async {

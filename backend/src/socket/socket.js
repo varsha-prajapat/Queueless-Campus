@@ -115,4 +115,6 @@ export const emitTokenEvent = (io, token, eventName = "token:update") => {
   if (counterId) {
     io.to(`role_COUNTER_${counterId}`).emit(eventName, token);
   }
+  /* 🛡️ ADMIN (NEW ADD) */
+  io.to("role_ADMIN").emit(eventName, token);
 };

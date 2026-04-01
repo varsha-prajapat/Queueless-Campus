@@ -2,216 +2,127 @@ import mongoose from "mongoose";
 import Token from "../models/tokenModel.js";
 import Service from "../models/serviceModel.js";
 import Counter from "../models/counterModel.js";
-import Notification from "../models/NotificationModel.js";
-import { createNotification } from "./notificationService.js";
+import {
+  sendNotification,
+  emitStudentStats,
+  emitTokenEvent,
+} from "./communicationService.js";
 
-/* ================= SAFE EMIT ================= */
-const safeEmit = (io, room, event, data) => {
-  try {
-    if (!io || typeof io.to !== "function") return;
-    io.to(room).emit(event, data);
-  } catch (err) {
-    console.error("Emit Error:", err.message);
-  }
-};
-
-/* ================= SOCKET SETUP ================= */
-export const queueSocket = (io) => {
-  io.on("connection", async (socket) => {
-    try {
-      const userId = socket.handshake.query?.userId?.toString();
-
-      const roles =
-        socket.handshake.query?.roles?.split(",").map((r) => r.toUpperCase()) ||
-        [];
-
-      console.log("👤 Connected:", socket.id, userId, roles);
-
-      if (userId) socket.join(userId);
-      roles.forEach((r) => socket.join(`role_${r}`));
-
-      /* STAFF JOIN COUNTERS */
-      if (roles.includes("STAFF") && userId) {
-        if (!mongoose.Types.ObjectId.isValid(userId)) return;
-
-        const counters = await Counter.find({
-          staffIds: new mongoose.Types.ObjectId(userId),
-          isActive: true,
-        });
-
-        for (const c of counters) {
-          socket.join(`role_COUNTER_${c._id}`);
-          const queue = await getStaffQueue(c._id);
-          socket.emit("queue:update", queue);
-        }
-      }
-
-      /* NOTIFICATIONS */
-      if (userId) {
-        const notifications = await Notification.find({
-          $and: [
-            {
-              $or: [{ userId }, { roles: { $in: roles } }, { isGlobal: true }],
-            },
-            { hiddenFor: { $ne: userId } },
-          ],
-        })
-          .sort({ createdAt: -1 })
-          .limit(50)
-          .lean();
-
-        socket.emit("notifications:update", notifications);
-      }
-
-      socket.on("disconnect", () => {
-        console.log("❌ Disconnected:", socket.id);
-      });
-    } catch (err) {
-      console.error("Socket Error:", err);
-    }
-  });
-};
-
-/* ================= NOTIFICATION ================= */
-const sendNotification = async ({
-  title,
-  message,
-  userId,
-  counterId = null,
-  roles = [],
-  isGlobal = false,
-  type = "INFO",
-  io,
-  tokenId = null,
-  tokenNumber = null,
-}) => {
-  if (!title || !message) return null;
-
-  try {
-    const notification = await createNotification(io, {
-      title,
-      message,
-      userId,
-      counterId,
-      roles,
-      isGlobal,
-      type,
-      tokenId,
-      tokenNumber,
-    });
-
-    const payload = notification;
-
-    // 👇 1. USER ROOM
-    if (userId) {
-      safeEmit(io, userId.toString(), "notifications:new", payload);
-    }
-
-    // 👇 2. ROLE ROOMS
-    roles.forEach((r) => {
-      safeEmit(io, `role_${r}`, "notifications:new", payload);
-    });
-
-    // 👇 3. COUNTER ROOM (FIXED)
-    if (counterId) {
-      safeEmit(io, `role_COUNTER_${counterId}`, "notifications:new", payload);
-    }
-
-    return notification;
-  } catch (err) {
-    console.error("Notification Error:", err.message);
-  }
-};
-
-/* ================= STUDENT STATS EMIT ================= */
-const emitStudentStats = async (studentId, io) => {
-  if (!studentId) return;
-
-  try {
-    const stats = await getTokenStatsService(studentId);
-    safeEmit(io, studentId.toString(), "token:update", stats);
-  } catch (err) {
-    console.error("Stats Error:", err.message);
-  }
-};
-
-/* ================= TOKEN EVENT EMITTER ================= */
-const emitTokenEvent = (token, event, io) => {
-  if (!token) return;
-
-  const studentRoom =
-    token.studentId?._id?.toString() || token.studentId?.toString();
-
-  const counterRoom = token.counterId?.toString();
-
-  if (studentRoom) safeEmit(io, studentRoom, event, token);
-  if (counterRoom) safeEmit(io, `role_COUNTER_${counterRoom}`, event, token);
-};
-
-/* ================= CREATE TOKEN ================= */
 export const createToken = async (
   studentId,
   serviceId,
   isUrgent = false,
   io = null,
 ) => {
-  if (!studentId || !serviceId)
-    throw new Error("Student ID and Service ID required");
+  try {
+    // ---------------- VALIDATION ----------------
+    if (!studentId || !serviceId) {
+      throw new Error("Student ID and Service ID required");
+    }
 
-  // ✅ GET SERVICE
-  const service = await Service.findById(serviceId);
-  if (!service) throw new Error("Service not found");
+    // ---------------- ACTIVE TOKEN CHECK ----------------
+    const existingToken = await Token.findOne({
+      studentId,
+      status: { $in: ["waiting", "waiting_payment", "serving"] },
+    });
 
-  // ✅ GET ACTIVE COUNTERS
-  const counters = await Counter.find({
-    serviceId: service._id,
-    isActive: true,
-  });
+    if (existingToken) {
+      throw new Error("Already have active token");
+    }
 
-  if (!counters.length) {
-    throw new Error("No active counter for this service");
+    // ---------------- SERVICE ----------------
+    const service = await Service.findById(serviceId);
+    if (!service) throw new Error("Service not found");
+
+    // ---------------- COUNTERS ----------------
+    const counters = await Counter.find({
+      serviceId: service._id,
+      isActive: true,
+    });
+
+    if (!counters.length) {
+      throw new Error("No active counter found");
+    }
+
+    // ---------------- LOAD BALANCING ----------------
+    const tokenStats = await Token.aggregate([
+      {
+        $match: {
+          serviceId: service._id,
+          status: { $in: ["waiting", "waiting_payment", "serving"] },
+        },
+      },
+      {
+        $group: {
+          _id: "$counterId",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const loadMap = new Map();
+    tokenStats.forEach((t) => {
+      loadMap.set(String(t._id), t.count);
+    });
+
+    let selectedCounter = counters[0];
+
+    for (const counter of counters) {
+      const current = loadMap.get(String(counter._id)) || 0;
+      const selected = loadMap.get(String(selectedCounter._id)) || 0;
+
+      if (current < selected) {
+        selectedCounter = counter;
+      }
+    }
+
+    // ---------------- 🔥 TOKEN NUMBER GENERATION (NO COUNTER FIELD) ----------------
+    const lastToken = await Token.findOne({
+      counterId: selectedCounter._id,
+    })
+      .sort({ tokenNumber: -1 }) // highest first
+      .select("tokenNumber");
+
+    const tokenNumber = lastToken ? lastToken.tokenNumber + 1 : 1;
+
+    // ---------------- CREATE TOKEN ----------------
+    const token = await Token.create({
+      studentId,
+      serviceId: service._id,
+      counterId: selectedCounter._id,
+      tokenNumber,
+      status: service.hasFee ? "waiting_payment" : "waiting",
+      isUrgent,
+    });
+
+    // ---------------- SOCKET EVENTS ----------------
+    if (io) {
+      io.to(studentId.toString()).emit("token:new", token);
+      io.to("role_STAFF").emit("token:create", token);
+      io.to("role_ADMIN").emit("token:new", token);
+      io.emit("token:update", token);
+    }
+
+    // ---------------- NOTIFICATION ----------------
+    await sendNotification({
+      title: "Token Created",
+      message: `Your token ${tokenNumber} created`,
+      type: "CREATED",
+      counterId: token.counterId,
+      tokenId: token._id,
+      tokenNumber,
+      userId: studentId,
+      io,
+    });
+
+    await getAdminQueueDetails(io);
+
+    return token;
+  } catch (error) {
+    console.error("createToken error:", error.message);
+    throw error;
   }
-
-  // ✅ pick first active counter
-  const counter = counters[0];
-
-  // ✅ get last token safely
-  const lastToken = await Token.findOne({ counterId: counter._id })
-    .sort({ tokenNumber: -1 })
-    .lean();
-
-  const tokenNumber = lastToken ? lastToken.tokenNumber + 1 : 1;
-
-  const status = service.hasFee ? "waiting_payment" : "waiting";
-
-  // ✅ CREATE TOKEN
-  const token = await Token.create({
-    studentId,
-    serviceId: service._id,
-    counterId: counter._id,
-    tokenNumber,
-    status,
-    isUrgent,
-  });
-
-  // ✅ SOCKET EVENTS
-  emitTokenEvent(token, "token:created", io);
-  await emitStudentStats(studentId, io);
-
-  // ✅ NOTIFICATION (student ko milega)
-  await sendNotification({
-    title: "Token Created",
-    message: `Your token ${tokenNumber} has been created at Counter ${counter.name}.`,
-    type: "CREATED",
-    counterId: token.counterId,
-    tokenId: token._id,
-    tokenNumber: token.tokenNumber,
-    io,
-  });
-
-  return token;
-};
-/* ================= CALL NEXT TOKEN (STAFF) ================= */
+}; /* ================= CALL NEXT TOKEN (STAFF) ================= */
 export const callNextToken = async (counterId, io = null) => {
   const active = await Token.findOne({
     counterId,
@@ -242,7 +153,6 @@ export const callNextToken = async (counterId, io = null) => {
   next.status = "serving";
   next.servingStartedAt = new Date();
   await next.save();
-
   await sendNotification({
     title: "Your Turn",
     message: `Token ${next.tokenNumber}, please come to the counter.`,
@@ -252,7 +162,7 @@ export const callNextToken = async (counterId, io = null) => {
     tokenNumber: next.tokenNumber,
     io,
   });
-
+  await getAdminQueueDetails(io);
   emitTokenEvent(next, "token:called", io);
   await emitStudentStats(next.studentId._id, io);
 
@@ -266,11 +176,15 @@ export const callNextToken = async (counterId, io = null) => {
 export const completeToken = async (tokenId, io) => {
   const token = await Token.findById(tokenId);
   if (!token) throw new Error("Token not found");
-
+  if (token.status !== "serving") {
+    throw new Error(
+      `Token cannot be completed because current status is "${token.status}". It must be "serving".`,
+    );
+  }
   // ✅ mark as completed
   token.status = "completed";
   await token.save();
-
+  await getAdminQueueDetails(io);
   // ✅ socket events
   emitTokenEvent(token, "token:completed", io);
   await emitStudentStats(token.studentId, io);
@@ -305,7 +219,7 @@ export const skipToken = async (tokenId, io) => {
     userId: token.studentId,
     io,
   });
-
+  await getAdminQueueDetails(io);
   emitTokenEvent(token, "token:skipped", io);
   return token;
 };
@@ -526,7 +440,7 @@ export const cancelToken = async (tokenId, studentId, io = null) => {
       counterId: token.counterId, // 👈 counter ko bhejna
       io,
     });
-
+    await getAdminQueueDetails(io);
     return {
       success: true,
       message: "Token cancelled successfully",
@@ -574,6 +488,7 @@ export const confirmPayment = async (tokenId, studentId, io = null) => {
       tokenNumber: token.tokenNumber,
       io,
     });
+    await getAdminQueueDetails(io);
 
     // 🔔 2. Notify Staff / Counter
     if (token.counterId) {
@@ -614,6 +529,9 @@ export const confirmPayment = async (tokenId, studentId, io = null) => {
       });
     }
 
+    // 📡 7. Update admin queue details
+    await getAdminQueueDetails(io);
+
     return {
       success: true,
       message: "Payment confirmed successfully",
@@ -621,6 +539,93 @@ export const confirmPayment = async (tokenId, studentId, io = null) => {
     };
   } catch (err) {
     console.error("❌ Confirm Payment Error:", err.message);
+    throw err;
+  }
+};
+export const getAdminQueueDetails = async (io = null) => {
+  try {
+    const counters = await Counter.find({ isActive: true }).lean();
+
+    const result = [];
+
+    // 🔥 GLOBAL COUNTERS
+    let totalWaiting = 0;
+    let totalServing = 0;
+    let totalCompleted = 0;
+    let totalCancelled = 0;
+    let totalSkipped = 0;
+
+    for (const counter of counters) {
+      const tokens = await Token.find({
+        counterId: counter._id,
+      })
+        .populate("studentId", "name email")
+        .populate("serviceId", "name fee")
+        .sort({ isUrgent: -1, createdAt: 1 })
+        .lean();
+
+      const waiting = tokens.filter((t) => t.status === "waiting").length;
+      const serving = tokens.find((t) => t.status === "serving") || null;
+      const completed = tokens.filter((t) => t.status === "completed").length;
+      const cancelled = tokens.filter((t) => t.status === "cancelled").length;
+      const skipped = tokens.filter((t) => t.status === "skipped").length;
+
+      // 🔥 ADD TO GLOBAL TOTALS
+      totalWaiting += waiting;
+      totalServing += serving ? 1 : 0;
+      totalCompleted += completed;
+      totalCancelled += cancelled;
+      totalSkipped += skipped;
+
+      result.push({
+        counterId: counter._id,
+        counterName: counter.name,
+
+        summary: {
+          waiting,
+          serving: serving?.tokenNumber || "-",
+          completed,
+          cancelled,
+          skipped,
+        },
+
+        currentToken: serving
+          ? {
+              tokenId: serving._id,
+              tokenNumber: serving.tokenNumber,
+              student: serving.studentId,
+              service: serving.serviceId,
+              status: serving.status,
+              servingStartedAt: serving.servingStartedAt,
+            }
+          : null,
+
+        queue: tokens,
+      });
+    }
+
+    // 🔥 FINAL GLOBAL SUMMARY
+    const globalStats = {
+      totalWaiting,
+      totalServing,
+      totalCompleted,
+      totalCancelled,
+      totalSkipped,
+    };
+
+    const response = {
+      globalStats,
+      counters: result,
+    };
+
+    // 📡 REAL-TIME ADMIN UPDATE
+    if (io) {
+      io.to("role_ADMIN").emit("admin:queue:update", response);
+    }
+
+    return response;
+  } catch (err) {
+    console.error("❌ Admin Queue Error:", err.message);
     throw err;
   }
 };

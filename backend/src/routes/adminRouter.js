@@ -23,7 +23,7 @@ import {
   deleteDepartment,
   getDepartments,
 } from "../controllers/departmentController.js";
-import { getAdminDashboardInfoToken } from "../controllers/tokenadminController.js";
+import { getAdminQueueDetailsService } from "../controllers/tokenadminController.js";
 
 import {
   createBanner,
@@ -88,7 +88,7 @@ router.get("/counter", getAllCounters);
 router.get("/counter/:id", getCounterById);
 
 // Dashboard
-router.get("/dashboardtoken", getAdminDashboardInfoToken);
+router.get("/dashboardtoken", getAdminQueueDetailsService);
 
 // 🔔 Notifications
 

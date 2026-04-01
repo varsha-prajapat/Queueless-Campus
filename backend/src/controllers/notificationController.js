@@ -28,7 +28,6 @@ export const getUnreadNotificationCount = async (req, res, next) => {
       req.user.role,
     );
 
-    console.log("count", count);
     res.status(200).json({
       success: true,
       unreadCount: count,

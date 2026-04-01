@@ -7,6 +7,7 @@ import mongoose from "mongoose";
  */
 export const createNotification = async (io, data) => {
   try {
+    // ---------------- VALIDATION ----------------
     if (!data.title || !data.message) {
       throw new Error("Title & message required");
     }
@@ -21,8 +22,10 @@ export const createNotification = async (io, data) => {
       throw new Error("Target required");
     }
 
+    // ---------------- SAVE ----------------
     const notification = await Notification.create(data);
     const notif = notification.toObject();
+
     if (!io) return notif;
 
     const payload = {
@@ -30,32 +33,37 @@ export const createNotification = async (io, data) => {
       data: notif,
     };
 
-    /* 🌍 GLOBAL */
+    // ---------------- GLOBAL ----------------
     if (notif.isGlobal) {
-      io.emit("notification", payload);
+      io.emit("notification:new", payload);
       return notif;
     }
 
-    /* 👤 PERSONAL */
+    // ---------------- PERSONAL ----------------
     if (notif.userId) {
-      io.to(notif.userId.toString()).emit("notification", payload);
+      io.to(notif.userId.toString()).emit("notification:new", payload);
     }
 
-    /* 🎭 ROLE */
+    // ---------------- ROLE ----------------
     if (notif.roles?.length) {
       notif.roles.forEach((role) => {
-        io.to(`role_${role}`).emit("notification", payload);
+        const safeRole = role.toUpperCase(); // 🔥 FIX
+        io.to(`role_${safeRole}`).emit("notification:new", payload);
       });
     }
 
-    /* 🏢 DEPARTMENT */
+    // ---------------- DEPARTMENT ----------------
     if (notif.departmentId) {
-      io.to(`dept_${notif.departmentId}`).emit("notification", payload);
+      io.to(`dept_${notif.departmentId}`).emit("notification:new", payload);
     }
 
-    /* 🧑‍💼 COUNTER */
+    // ---------------- COUNTER ----------------
     if (notif.counterId) {
-      io.to(`counter_${notif.counterId}`).emit("notification", payload);
+      // 🔥 IMPORTANT FIX (MATCH SOCKET JOIN)
+      io.to(`role_COUNTER_${notif.counterId}`).emit(
+        "notification:new",
+        payload,
+      );
     }
 
     return notif;
@@ -154,7 +162,7 @@ export const markAllAsRead = async (io, userId) => {
     );
 
     if (io) {
-      io.to(userId.toString()).emit("notification", {
+      io.to(userId.toString()).emit("notification:read_all", {
         type: "READ_ALL",
       });
     }
@@ -180,7 +188,7 @@ export const deleteNotification = async (io, userId, notificationId) => {
     }
 
     if (io) {
-      io.to(userId.toString()).emit("notification", {
+      io.to(userId.toString()).emit("notification:delete_one", {
         type: "DELETE_ONE",
         data: { notificationId },
       });
@@ -204,7 +212,7 @@ export const deleteAllNotifications = async (io, userId) => {
     );
 
     if (io) {
-      io.to(userId.toString()).emit("notification", {
+      io.to(userId.toString()).emit("notification:delete_all", {
         type: "DELETE_ALL",
       });
     }
@@ -216,6 +224,9 @@ export const deleteAllNotifications = async (io, userId) => {
   }
 };
 
+/**
+ * 📊 Unread Count
+ */
 export const getUnreadCount = async (userId, role) => {
   try {
     if (!userId) {
@@ -225,7 +236,6 @@ export const getUnreadCount = async (userId, role) => {
     const userObjectId = new mongoose.Types.ObjectId(userId);
     let counterIds = [];
 
-    // If role is STAFF, include counter-based notifications
     if (role?.toUpperCase() === "STAFF") {
       const counters = await Counter.find({
         staffIds: userObjectId,
@@ -235,22 +245,21 @@ export const getUnreadCount = async (userId, role) => {
       counterIds = counters.map((c) => c._id);
     }
 
-    // Build query
     const query = {
       $and: [
         {
           $or: [
-            { userId: userObjectId }, // personal notifications
-            { isGlobal: true }, // global notifications
-            ...(counterIds.length ? [{ counterId: { $in: counterIds } }] : []), // counter notifications for staff
+            { userId: userObjectId },
+            { roles: { $in: [role] } }, // 🔥 ADD THIS LINE
+            { isGlobal: true },
+            ...(counterIds.length ? [{ counterId: { $in: counterIds } }] : []),
           ],
         },
-        { hiddenFor: { $ne: userObjectId } }, // not hidden
-        { readBy: { $ne: userObjectId } }, // not read
+        { hiddenFor: { $ne: userObjectId } },
+        { readBy: { $ne: userObjectId } },
       ],
     };
 
-    // Count unread notifications
     const count = await Notification.countDocuments(query);
 
     return count;

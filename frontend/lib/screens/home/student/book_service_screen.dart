@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+
 import '../../../core/config/api_config.dart';
 import '../../../services/student_service/token_service.dart';
 import '../../../services/socket_service.dart';
@@ -115,13 +116,16 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
     });
   }
 
-  Future<void> handleServiceTap(Map<String, dynamic> service) async {
+  Future<void> handleServiceTap(
+    Map<String, dynamic> service, {
+    bool isUrgent = false,
+  }) async {
     final serviceId = service["_id"]?.toString();
     if (serviceId == null) return;
 
     final booked = await TokenService.bookToken(
       serviceId: serviceId,
-      isUrgent: false,
+      isUrgent: isUrgent,
     );
 
     if (booked == null) {
@@ -132,8 +136,42 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
     myTokens.add(booked);
     _latestTokenMap[serviceId] = booked;
 
-    showBottomMessage(context, "Token booked");
+    showBottomMessage(
+      context,
+      isUrgent ? "Urgent token booked" : "Token booked",
+    );
+
     setState(() {});
+  }
+
+  // 🔥 URGENT DIALOG ADDED (ONLY NEW LOGIC)
+  Future<void> handleUrgentFlow(Map<String, dynamic> service) async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Urgent Service"),
+        content: const Text("Do you want urgent booking?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, "cancel"),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, "no"),
+            child: const Text("No"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, "yes"),
+            child: const Text("Yes"),
+          ),
+        ],
+      ),
+    );
+
+    if (result == "cancel" || result == null) return;
+
+    final isUrgent = result == "yes";
+    await handleServiceTap(service, isUrgent: isUrgent);
   }
 
   Future<void> handleCancel(TokenModel token) async {
@@ -152,7 +190,6 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
     }
   }
 
-  // ✅ PAYMENT CONFIRM
   Future<void> handlePayment(TokenModel token) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -211,7 +248,6 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
 
     final fee = service["hasFee"] == true ? service["fee"] ?? 0 : "Free";
 
-    // ✅ BUTTON COLOR FIX
     Color bgColor = Colors.blue.shade100;
     Color textColor = Colors.blue;
 
@@ -283,7 +319,13 @@ class _BookServiceScreenState extends State<BookServiceScreen> {
                             await handlePayment(token);
                           }
                         } else {
-                          await handleServiceTap(service);
+                          final allowUrgent = service["allowUrgent"] == true;
+
+                          if (allowUrgent) {
+                            await handleUrgentFlow(service);
+                          } else {
+                            await handleServiceTap(service);
+                          }
                         }
                       },
                 child: Container(

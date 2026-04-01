@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../provider/notification_provider.dart';
 import '../../shared/screens/notification_screen.dart';
-import "../../utils/auth_role_helper.dart";
+import '../../utils/auth_role_helper.dart';
 
 class HomeHeader extends StatefulWidget {
   const HomeHeader({super.key});
@@ -15,6 +15,9 @@ class HomeHeader extends StatefulWidget {
 
 class _HomeHeaderState extends State<HomeHeader> {
   String? role;
+  bool _loaded = false;
+
+  final Color darkGreen = const Color(0xFF0B6B3A);
 
   @override
   void initState() {
@@ -23,11 +26,16 @@ class _HomeHeaderState extends State<HomeHeader> {
   }
 
   Future<void> _loadRole() async {
-    role = await AuthRoleHelper.getRole();
-    if (mounted) setState(() {});
+    final r = await AuthRoleHelper.getRole();
+
+    if (!mounted) return;
+
+    setState(() {
+      role = r;
+      _loaded = true;
+    });
   }
 
-  /// ✅ Safe badge formatter
   String _formatBadge(int count) {
     if (count <= 0) return "";
     if (count > 5) return "5+";
@@ -36,92 +44,110 @@ class _HomeHeaderState extends State<HomeHeader> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<NotificationProvider>(context);
+    return Consumer<NotificationProvider>(
+      builder: (context, provider, _) {
+        final unread = provider.unreadCount;
+        final badgeText = _formatBadge(unread);
 
-    final unread = provider.unreadCount;
-    final badgeText = _formatBadge(unread);
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      color: Colors.white,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // ✅ Left Side
-          Expanded(
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.qr_code_rounded,
-                  color: AppColors.primary,
-                  size: 24,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "QueueLess Campus",
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.appTitle.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              )
+            ],
           ),
-
-          // ✅ Right Side (ADMIN HIDE, STAFF + STUDENT SHOW)
-          if (role != null && role != "ADMIN")
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                IconButton(
-                  icon: const Icon(
-                    Icons.notifications,
-                    color: AppColors.primary,
-                    size: 22,
-                  ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const NotificationScreen(),
-                      ),
-                    );
-                  },
-                ),
-
-                // 🔥 BADGE (FIXED LOGIC)
-                if (unread > 0)
-                  Positioned(
-                    right: 6,
-                    top: 6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // LEFT SIDE
+              const Expanded(
+                child: Row(
+                  children: [
+                    Icon(Icons.qr_code_rounded, color: Color(0xFF0B6B3A)),
+                    SizedBox(width: 8),
+                    Expanded(
                       child: Text(
-                        badgeText,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
+                        "QueueLess Campus",
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Color(0xFF0B6B3A),
                           fontWeight: FontWeight.bold,
+                          fontSize: 16,
                         ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-        ],
-      ),
+                  ],
+                ),
+              ),
+
+              // RIGHT SIDE (NOTIFICATION)
+              if (_loaded && role != "ADMIN")
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        Icons.notifications,
+                        color: darkGreen,
+                      ),
+
+                      // ✅ FIXED: mark read AFTER RETURN
+                      onPressed: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationScreen(),
+                          ),
+                        );
+
+                        if (!mounted) return;
+
+                        // 🔥 CALL AFTER COMING BACK
+                        final provider = Provider.of<NotificationProvider>(
+                          context,
+                          listen: false,
+                        );
+
+                        await provider.markAllAsRead();
+                      },
+                    ),
+
+                    // BADGE
+                    if (unread > 0)
+                      Positioned(
+                        right: 6,
+                        top: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            badgeText,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
