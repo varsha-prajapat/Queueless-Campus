@@ -181,7 +181,7 @@ class _UserScreenState extends State<UserScreen> {
           child: Column(
             children: [
               DropdownButtonFormField<String>(
-                value: roles.contains(selectedRole) ? selectedRole : null,
+                initialValue: roles.contains(selectedRole) ? selectedRole : null,
                 items: roles
                     .map((role) =>
                         DropdownMenuItem(value: role, child: Text(role)))
@@ -196,7 +196,7 @@ class _UserScreenState extends State<UserScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: selectedDepartmentId.isNotEmpty
+                initialValue: selectedDepartmentId.isNotEmpty
                     ? selectedDepartmentId
                     : null,
                 items: departments
@@ -252,8 +252,9 @@ class _UserScreenState extends State<UserScreen> {
 
       setState(() {
         final index = users.indexWhere((u) => u.id == user.id);
-        if (index != -1)
+        if (index != -1) {
           users[index] = users[index].copyWith(isActive: newStatus);
+        }
         _applySearchWithoutSetState();
       });
 

@@ -30,10 +30,6 @@ class NotificationProvider with ChangeNotifier {
   // ----------------- SOCKET LISTENER -----------------
   void initSocketListener() {
     _notifSub ??= _socketService.notifStream.listen((data) async {
-      if (data == null) return;
-
-      print("📩 SOCKET EVENT: $data");
-
       final type = data['type'];
 
       if (type == null) {
@@ -82,9 +78,7 @@ class NotificationProvider with ChangeNotifier {
       ]);
 
       notifyListeners();
-    } catch (e) {
-      print("⚠️ refresh error: $e");
-    }
+    } catch (e) {}
   }
 
   // ----------------- FETCH NOTIFICATIONS -----------------
@@ -92,9 +86,7 @@ class NotificationProvider with ChangeNotifier {
     try {
       final res = await _api.fetchNotifications();
       notifications = res;
-    } catch (e) {
-      print("⚠️ fetchNotifications error: $e");
-    }
+    } catch (e) {}
   }
 
   // ----------------- FETCH UNREAD -----------------
@@ -102,11 +94,7 @@ class NotificationProvider with ChangeNotifier {
     try {
       final count = await _api.getUnreadCount();
       unreadCount = count;
-
-      print("📊 Unread Count: $unreadCount");
-    } catch (e) {
-      print("⚠️ fetchUnreadCount error: $e");
-    }
+    } catch (e) {}
   }
 
   // ----------------- MARK ALL READ -----------------
@@ -116,9 +104,7 @@ class NotificationProvider with ChangeNotifier {
 
       // 🔥 just refresh everything properly
       await refresh();
-    } catch (e) {
-      print("⚠️ markAllAsRead error: $e");
-    }
+    } catch (e) {}
   }
 
   // ----------------- DELETE ONE -----------------
@@ -126,9 +112,7 @@ class NotificationProvider with ChangeNotifier {
     try {
       await _api.deleteNotification(id, type);
       await refresh();
-    } catch (e) {
-      print("⚠️ deleteNotification error: $e");
-    }
+    } catch (e) {}
   }
 
   // ----------------- DELETE ALL -----------------
@@ -140,9 +124,7 @@ class NotificationProvider with ChangeNotifier {
       notifyListeners();
 
       await refresh();
-    } catch (e) {
-      print("⚠️ deleteAll error: $e");
-    }
+    } catch (e) {}
   }
 
   // ----------------- DISPOSE -----------------

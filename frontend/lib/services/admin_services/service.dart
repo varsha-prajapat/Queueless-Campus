@@ -101,9 +101,6 @@ class ServiceApi {
       }),
     );
 
-    print("STATUS: ${response.statusCode}");
-    print("BODY: ${response.body}");
-
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception("Failed to create service");
     }

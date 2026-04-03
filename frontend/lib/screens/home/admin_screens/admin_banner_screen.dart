@@ -51,7 +51,7 @@ class _AdminBannerScreenState extends State<AdminBannerScreen> {
               "name": dept.name,
               "isActive": status == "active"
             };
-          }).toList()
+          })
         ];
       });
     } catch (e) {
@@ -213,7 +213,7 @@ class _AdminBannerScreenState extends State<AdminBannerScreen> {
                     const SizedBox(height: 12),
 
                     DropdownButtonFormField<String>(
-                      value: selectedDepartmentId,
+                      initialValue: selectedDepartmentId,
                       decoration: const InputDecoration(
                           labelText: "Department",
                           border: OutlineInputBorder()),
@@ -230,7 +230,7 @@ class _AdminBannerScreenState extends State<AdminBannerScreen> {
                     const SizedBox(height: 12),
 
                     DropdownButtonFormField<String>(
-                      value: targetRole,
+                      initialValue: targetRole,
                       decoration: const InputDecoration(
                           labelText: "Target Role",
                           border: OutlineInputBorder()),

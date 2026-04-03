@@ -91,8 +91,6 @@ class TokenService {
         }),
       );
 
-      print("COMPLETE RESPONSE: ${response.body}");
-
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
@@ -134,8 +132,6 @@ class TokenService {
         headers: headers,
         body: jsonEncode({"staffId": staffId}),
       );
-
-      print("CALL NEXT RESPONSE: ${response.body}");
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -187,7 +183,6 @@ class TokenService {
 
       return [];
     } catch (e) {
-      print("getAllTokensOfStaffDetail error: $e");
       return [];
     }
   }

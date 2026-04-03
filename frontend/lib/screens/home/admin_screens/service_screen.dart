@@ -66,14 +66,10 @@ class _ServiceScreenState extends State<ServiceScreen> {
     try {
       final serviceData = await ServiceApi.fetchServices();
 
-      if (serviceData is List) {
-        services = serviceData
-            .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
-            .toList();
-      } else {
-        services = [];
-      }
-
+      services = serviceData
+          .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
+          .toList();
+    
       setState(() => isLoading = false);
 
       // Reload departments to ensure all referenced departments are included
@@ -172,7 +168,7 @@ class _ServiceScreenState extends State<ServiceScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: serviceType,
+                    initialValue: serviceType,
                     decoration: InputDecoration(
                       labelText: "Service Type",
                       border: OutlineInputBorder(
@@ -186,14 +182,15 @@ class _ServiceScreenState extends State<ServiceScreen> {
                     onChanged: (value) {
                       setStateDialog(() {
                         serviceType = value!;
-                        if (serviceType == "Documents")
+                        if (serviceType == "Documents") {
                           feeController.text = "0";
+                        }
                       });
                     },
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: selectedDepartmentId,
+                    initialValue: selectedDepartmentId,
                     decoration: InputDecoration(
                       labelText: "Department",
                       border: OutlineInputBorder(

@@ -68,6 +68,10 @@ class Api_Config {
 
   static const String skip_token = "$base_Url$Api_Prefix/staff/token/skip";
   static const String call_token = "$base_Url$Api_Prefix/staff/call-next";
+
   static const String cancel_token =
       "$base_Url$Api_Prefix/student/token/cancel";
+
+  static const String token_dashboard_admin =
+      "$base_Url$Api_Prefix/admin/dashboardtoken";
 }

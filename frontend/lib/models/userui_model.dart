@@ -1,4 +1,3 @@
-import '../../../core/config/api_config.dart';
 
 class Userui {
   String id;

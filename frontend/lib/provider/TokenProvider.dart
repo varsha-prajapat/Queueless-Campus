@@ -18,8 +18,6 @@ class TokenProvider extends ChangeNotifier {
 
   /// ================= INIT PROVIDER =================
   Future<void> _init() async {
-    print("🚀 TokenProvider INIT");
-
     // Fetch initial token stats and my token
     await refresh();
     await fetchMyToken();
@@ -33,14 +31,11 @@ class TokenProvider extends ChangeNotifier {
     try {
       loading = true;
       notifyListeners();
-      print("🔄 Refreshing token stats...");
 
       final newStats = await TokenService.getTokenStats();
-      print("📥 Token Stats fetched: $newStats");
 
       stats = newStats;
     } catch (e) {
-      print("⚠️ TokenProvider refresh error: $e");
       stats = TokenStats.empty();
     } finally {
       loading = false;
@@ -53,7 +48,6 @@ class TokenProvider extends ChangeNotifier {
   /// ================= FETCH CURRENT USER TOKEN =================
   Future<void> fetchMyToken() async {
     try {
-      print("🔄 Fetching my token...");
       final tokens = await TokenService.getMyTokens();
       if (tokens.isNotEmpty) {
         myToken = tokens.first;
@@ -61,11 +55,9 @@ class TokenProvider extends ChangeNotifier {
             "📥 My token fetched: ${myToken!.id}, Status: ${myToken!.status}");
       } else {
         myToken = null;
-        print("ℹ️ No active token for user");
       }
       notifyListeners();
     } catch (e) {
-      print("⚠️ TokenProvider fetchMyToken error: $e");
       myToken = null;
       notifyListeners();
     }
@@ -93,17 +85,13 @@ class TokenProvider extends ChangeNotifier {
 
   /// ================= SOCKET LISTENER =================
   void _listenToSocket() {
-    print("🔌 Setting up socket listeners...");
-
     final socket = SocketService().socket;
     if (socket == null) {
-      print("⚠️ Socket not connected yet");
       return;
     }
 
     // Token created
     socket.on("token:created", (data) {
-      print("🔔 Socket event: token:created received: $data");
       if (data != null && data is Map<String, dynamic>) {
         updateToken(TokenModel.fromJson(data));
       }
@@ -111,7 +99,6 @@ class TokenProvider extends ChangeNotifier {
 
     // Payment confirmed
     socket.on("token:paymentConfirmed", (data) {
-      print("🔔 Socket event: token:paymentConfirmed received: $data");
       if (data != null && data is Map<String, dynamic>) {
         updateToken(TokenModel.fromJson(data));
       }
@@ -119,13 +106,11 @@ class TokenProvider extends ChangeNotifier {
 
     // Token called
     socket.on("token:called", (data) {
-      print("🔔 Socket event: token:called received");
       refresh();
     });
 
     // Token completed
     socket.on("token:completed", (data) {
-      print("🔔 Socket event: token:completed received: $data");
       refresh();
       if (myToken != null &&
           data != null &&
@@ -142,7 +127,6 @@ class TokenProvider extends ChangeNotifier {
   /// ================= DISPOSE =================
   @override
   void dispose() {
-    print("🛑 TokenProvider disposed, cancelling socket subscription");
     _notifSub?.cancel();
     super.dispose();
   }

@@ -12,8 +12,6 @@ class BannerService {
   static Future<String> _getToken() async {
     final token = await AuthStorage.getValidAccessToken();
 
-    debugPrint("🔐 TOKEN: $token");
-
     if (token == null || token.isEmpty) {
       throw Exception("Session expired. Please login again.");
     }
@@ -27,10 +25,6 @@ class BannerService {
     String? departmentId,
   }) async {
     try {
-      debugPrint("\n========= 🚀 FETCHING BANNERS =========");
-      debugPrint("👉 ROLE: $role");
-      debugPrint("👉 RAW DEPARTMENT: $departmentId");
-
       final token = await _getToken();
 
       final response = await http.get(
@@ -41,9 +35,6 @@ class BannerService {
         },
       ).timeout(const Duration(seconds: 15));
 
-      debugPrint("📡 STATUS CODE: ${response.statusCode}");
-      debugPrint("📦 RAW RESPONSE: ${response.body}");
-
       if (response.statusCode != 200) {
         throw Exception(
             "Failed to load banners. Status code: ${response.statusCode}");
@@ -51,12 +42,8 @@ class BannerService {
 
       final decoded = response.body.isNotEmpty ? jsonDecode(response.body) : {};
 
-      debugPrint("🧠 DECODED TYPE: ${decoded.runtimeType}");
-
       final List<dynamic> dataList =
           decoded is List ? decoded : (decoded["data"] as List? ?? []);
-
-      debugPrint("📊 TOTAL BANNERS FROM API: ${dataList.length}");
 
       List<BannerModel> banners = dataList
           .map((e) => BannerModel.fromJson(e as Map<String, dynamic>))
@@ -64,24 +51,16 @@ class BannerService {
 
       // ================= FILTER =================
       List<BannerModel> filtered = banners.where((banner) {
-        debugPrint("\n-------------------------------");
-        debugPrint("📢 Banner Title: ${banner.title}");
-
         // ✅ ACTIVE CHECK
         if (banner.isActive != true) {
-          debugPrint("❌ Skipped (Inactive)");
           return false;
         }
 
         // ================= ROLE MATCH =================
         final String userRole = role.toUpperCase();
-        final String? bannerRole = banner.targetRole?.trim().toUpperCase();
+        final String bannerRole = banner.targetRole.trim().toUpperCase();
 
-        final bool roleMatch =
-            bannerRole == null || bannerRole == "ALL" || bannerRole == userRole;
-
-        debugPrint("👉 BannerRole: $bannerRole");
-        debugPrint("👉 RoleMatch: $roleMatch");
+        final bool roleMatch = bannerRole == "ALL" || bannerRole == userRole;
 
         // ================= DEPARTMENT CLEAN =================
         final String? userDept = (departmentId == null ||
@@ -94,9 +73,6 @@ class BannerService {
             (banner.departmentId == null || banner.departmentId!.trim().isEmpty)
                 ? null
                 : banner.departmentId!.trim();
-
-        debugPrint("👉 UserDept: $userDept");
-        debugPrint("👉 BannerDept: $bannerDept");
 
         // ================= DEPARTMENT MATCH =================
         bool departmentMatch;
@@ -111,24 +87,13 @@ class BannerService {
           departmentMatch = bannerDept == userDept;
         }
 
-        debugPrint("👉 DepartmentMatch: $departmentMatch");
-
         final bool finalMatch = roleMatch && departmentMatch;
-
-        debugPrint("✅ FINAL MATCH: $finalMatch");
-        debugPrint("-------------------------------");
 
         return finalMatch;
       }).toList();
 
-      debugPrint("\n========= ✅ FINAL RESULT =========");
-      debugPrint("Total Filtered Banners: ${filtered.length}");
-      debugPrint("Titles: ${filtered.map((e) => e.title).toList().join(", ")}");
-      debugPrint("==================================\n");
-
       return filtered;
     } catch (e) {
-      debugPrint("❌ ERROR LOADING BANNERS: $e");
       throw Exception("Error loading banners: $e");
     }
   }

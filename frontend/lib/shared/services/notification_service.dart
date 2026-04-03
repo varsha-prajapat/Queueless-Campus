@@ -31,9 +31,6 @@ class NotificationService {
       headers: headers,
     );
 
-    print("🔥 STATUS notification: ${response.statusCode}");
-    print("🔥 BODY notification: ${response.body}");
-
     if (response.statusCode == 200) {
       final body = json.decode(response.body);
       final List data = body['data'] ?? [];
@@ -54,17 +51,11 @@ class NotificationService {
       headers: headers,
     );
 
-    print("🔥 STATUS: ${response.statusCode}");
-    print("🔥 BODY: ${response.body}");
-
     if (response.statusCode == 200) {
       final Map<String, dynamic> body =
           json.decode(response.body) as Map<String, dynamic>;
 
-      print("🔥 PARSED BODY: $body");
       final int count = (body['unreadCount'] ?? 0);
-
-      print("🔥 FINAL COUNT: $count");
 
       return count;
     }
@@ -96,7 +87,6 @@ class NotificationService {
   /// ❌ Delete single notification (API + SOCKET)
   Future<bool> deleteNotification(String id, String type) async {
     if (id.isEmpty) {
-      debugPrint("❌ EMPTY ID - BLOCKED DELETE");
       return false;
     }
 
@@ -104,8 +94,6 @@ class NotificationService {
     if (headers == null) return false;
 
     final url = "${Api_Config.notifications}/$id?type=$type";
-
-    debugPrint("🗑 DELETE URL: $url");
 
     final response = await http.delete(
       Uri.parse(url),

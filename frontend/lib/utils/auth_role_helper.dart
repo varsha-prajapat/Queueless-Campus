@@ -18,7 +18,7 @@ class AuthRoleHelper {
   /// 👤 Get User Role
   static Future<String> getRole() async {
     final data = await _payload();
-    print("Role${data?["role"]}");
+
     return data?['role'] ?? 'GUEST';
   }
 

@@ -84,9 +84,7 @@ class _TokenActionButtonsState extends State<TokenActionButtons> {
 
         widget.onTokenChanged?.call(next);
       }
-    } catch (e) {
-      debugPrint("Call error: $e");
-    }
+    } catch (e) {}
 
     if (mounted) setState(() => _loading = false);
   }
@@ -106,9 +104,7 @@ class _TokenActionButtonsState extends State<TokenActionButtons> {
 
         widget.onTokenChanged?.call(null);
       }
-    } catch (e) {
-      debugPrint("Complete error: $e");
-    }
+    } catch (e) {}
 
     if (mounted) setState(() => _loading = false);
   }
@@ -128,9 +124,7 @@ class _TokenActionButtonsState extends State<TokenActionButtons> {
 
         widget.onTokenChanged?.call(null);
       }
-    } catch (e) {
-      debugPrint("Skip error: $e");
-    }
+    } catch (e) {}
 
     if (mounted) setState(() => _loading = false);
   }

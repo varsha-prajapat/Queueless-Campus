@@ -24,6 +24,15 @@ const tokenSchema = new mongoose.Schema(
       ref: "Counter",
       required: true,
     },
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid", "failed"],
+      default: "pending",
+    },
+    totalAmount: {
+      type: Number,
+      default: 0,
+    },
 
     status: {
       type: String,

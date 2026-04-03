@@ -19,6 +19,11 @@ class SocketService {
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get tokenStream => _tokenController.stream;
 
+  // 🔥 ADMIN STREAM (NEW)
+  final StreamController<Map<String, dynamic>> _adminController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get adminStream => _adminController.stream;
+
   Timer? _notifDebounce;
 
   // ----------------- USER INFO -----------------
@@ -30,7 +35,6 @@ class SocketService {
 
   // ----------------- SERVER URL -----------------
   String get _serverUrl {
-    // ❗ FIXED: localhost is WRONG for Android emulator
     if (Platform.isAndroid) return 'http://localhost:3005';
     if (Platform.isIOS) return 'http://localhost:3005';
     return 'http://localhost:3005';
@@ -55,7 +59,6 @@ class SocketService {
     _initialized = true;
 
     if (userId == null || roles == null) {
-      print('⚠️ SocketService: init() not called');
       return;
     }
 
@@ -75,8 +78,6 @@ class SocketService {
 
     // ----------------- CONNECT EVENT -----------------
     socket!.onConnect((_) {
-      print("✅ Socket connected: ${socket!.id}");
-
       socket?.emit('joinRoom', userId);
 
       if (roles!.contains('staff') && counters != null) {
@@ -88,20 +89,17 @@ class SocketService {
       // ❗ FIX: register ALL listeners here (important)
       _registerNotificationListeners();
       _registerTokenListeners();
+      _registerAdminListeners(); // 🔥 NEW
     });
 
-    socket!.onDisconnect((reason) {
-      print("❌ Disconnected: $reason");
-    });
+    socket!.onDisconnect((reason) {});
 
-    socket!.onError((err) {
-      print("⚠️ Socket error: $err");
-    });
+    socket!.onError((err) {});
 
     socket!.on('ping', (_) => socket?.emit('pong'));
   }
 
-  // ----------------- NOTIFICATION EVENTS FIXED -----------------
+  // ----------------- NOTIFICATION EVENTS -----------------
   void _registerNotificationListeners() {
     final events = [
       'notification:new',
@@ -120,14 +118,10 @@ class SocketService {
         try {
           final notif = Map<String, dynamic>.from(data);
 
-          print("🔔 $event => $notif");
-
           if (!_notifController.isClosed) {
             _notifController.add(notif);
           }
-        } catch (e) {
-          print("⚠️ Notification parse error ($event): $e");
-        }
+        } catch (e) {}
       });
     }
   }
@@ -153,16 +147,31 @@ class SocketService {
         try {
           final normalized = Map<String, dynamic>.from(data);
 
-          print("📡 $event => $normalized");
-
           if (!_tokenController.isClosed) {
             _tokenController.add(normalized);
           }
-        } catch (e) {
-          print("⚠️ Token parse error ($event): $e");
-        }
+        } catch (e) {}
       });
     }
+  }
+
+  // ----------------- ADMIN EVENTS (NEW) -----------------
+  void _registerAdminListeners() {
+    const event = 'admin:queue:update';
+
+    socket?.off(event);
+
+    socket?.on(event, (data) {
+      if (data == null) return;
+
+      try {
+        final adminData = Map<String, dynamic>.from(data);
+
+        if (!_adminController.isClosed) {
+          _adminController.add(adminData);
+        }
+      } catch (e) {}
+    });
   }
 
   // ----------------- HELPERS -----------------
@@ -192,5 +201,6 @@ class SocketService {
 
     if (!_notifController.isClosed) _notifController.close();
     if (!_tokenController.isClosed) _tokenController.close();
+    if (!_adminController.isClosed) _adminController.close(); // 🔥 NEW
   }
 }

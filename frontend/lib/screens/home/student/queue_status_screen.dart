@@ -45,7 +45,6 @@ class _QueueStatusScreenState extends State<QueueStatusScreen> {
         stats = null;
         loading = false;
       });
-      print("Queue fetch error: $e");
     }
   }
 
@@ -146,15 +145,15 @@ class _QueueStatusScreenState extends State<QueueStatusScreen> {
                         ),
                         buildRow(
                           "Completed",
-                          stats!.completed?.toString() ?? "0",
+                          stats!.completed.toString() ?? "0",
                         ),
                         buildRow(
                           "Cancelled",
-                          stats!.cancelled?.toString() ?? "0",
+                          stats!.cancelled.toString() ?? "0",
                         ),
                         buildRow(
                           "Skipped",
-                          stats!.skipped?.toString() ?? "0",
+                          stats!.skipped.toString() ?? "0",
                         ),
                       ],
                     ),

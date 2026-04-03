@@ -68,10 +68,8 @@ class UserService {
     // Convert to JSON and send departmentId
     final Map<String, dynamic> jsonBody = user.toJson();
 
-    if (user.departmentId != null) {
-      jsonBody['departmentId'] = user.departmentId;
-    }
-
+    jsonBody['departmentId'] = user.departmentId;
+  
     // Remove old department name field if exists
     jsonBody.remove('department');
 

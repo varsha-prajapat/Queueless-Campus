@@ -28,13 +28,9 @@ class SocketService {
 
     _socket!.connect();
 
-    _socket!.onConnect((_) {
-      print("✅ Socket Connected");
-    });
+    _socket!.onConnect((_) {});
 
-    _socket!.onDisconnect((_) {
-      print("❌ Socket Disconnected");
-    });
+    _socket!.onDisconnect((_) {});
   }
 
   void on(String event, Function(dynamic) callback) {

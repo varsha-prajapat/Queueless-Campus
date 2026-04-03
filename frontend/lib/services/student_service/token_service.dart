@@ -76,7 +76,6 @@ class TokenService {
       // Fallback to empty if body or stats is invalid
       return TokenStats.empty();
     } catch (e, st) {
-      print("Token Stats Error: $e\n$st");
       return TokenStats.empty();
     }
   }
@@ -115,7 +114,6 @@ class TokenService {
       // Map each token JSON into TokenModel
       return tokenList.map((e) => TokenModel.fromJson(e)).toList();
     } catch (e, st) {
-      print("My Tokens Error: $e\n$st");
       return [];
     }
   }
@@ -142,7 +140,6 @@ class TokenService {
       }
       return null;
     } catch (e) {
-      print("Book Token Error: $e");
       return null;
     }
   }
@@ -169,7 +166,6 @@ class TokenService {
       }
       return false;
     } catch (e) {
-      print("Confirm Payment Error: $e");
       return false;
     }
   }
@@ -206,7 +202,6 @@ class TokenService {
           ? (service["name"] ?? "Unknown Service")
           : "Unknown Service";
     } catch (e) {
-      print("Get Service Name Error: $e");
       return "Unknown Service";
     }
   }
@@ -222,8 +217,6 @@ class TokenService {
           "tokenId": tokenId, // ✅ goes in req.body
         },
       );
-
-      print("CANCEL TOKEN RESPONSE: ${response.body}");
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return false;
@@ -244,7 +237,6 @@ class TokenService {
 
       return false;
     } catch (e) {
-      print("Cancel Token Error: $e");
       return false;
     }
   }

@@ -94,7 +94,6 @@ class _StaffSectionState extends State<StaffSection> {
       if (!mounted) return;
       setState(() => _banners = banners);
     } catch (e) {
-      debugPrint("Banner load error: $e");
     } finally {
       if (mounted) setState(() => _loadingBanners = false);
     }
@@ -107,9 +106,7 @@ class _StaffSectionState extends State<StaffSection> {
 
       if (!mounted) return;
       setState(() => _counterAssigned = counters.isNotEmpty);
-    } catch (e) {
-      debugPrint("Counter check error: $e");
-    }
+    } catch (e) {}
   }
 
   Future<void> _loadAllTokens() async {
@@ -120,9 +117,7 @@ class _StaffSectionState extends State<StaffSection> {
 
       _tokens = tokens;
       _recalculateUI();
-    } catch (e) {
-      debugPrint("Token load error: $e");
-    }
+    } catch (e) {}
   }
 
   Future<void> _initSocket() async {
@@ -151,9 +146,7 @@ class _StaffSectionState extends State<StaffSection> {
       });
 
       _recalculateUI();
-    } catch (e) {
-      debugPrint("Token socket sync error: $e");
-    }
+    } catch (e) {}
   }
 
   List<TokenModel> get _activeTokens {

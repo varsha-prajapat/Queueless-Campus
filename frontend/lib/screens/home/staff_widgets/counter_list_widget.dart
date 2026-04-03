@@ -51,9 +51,7 @@ class _CounterListWidgetState extends State<CounterListWidget> {
       setState(() {
         _counters = countersWithServices;
       });
-    } catch (e) {
-      debugPrint("Counter load error: $e");
-    }
+    } catch (e) {}
   }
 
   /// ---------------- SOCKET LISTENER ----------------

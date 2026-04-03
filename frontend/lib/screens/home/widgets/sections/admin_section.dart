@@ -4,9 +4,10 @@ import "../../admin_screens/admin_card.dart";
 import "../../admin_screens/Department_screen.dart";
 import "../../admin_screens/service_screen.dart";
 import "../../admin_screens/admin_banner_screen.dart";
-import "../../admin_screens/manage_counters_screen.dart"; // ✅ added
+import "../../admin_screens/manage_counters_screen.dart";
 import "../../../../shared/widgets/access_manager_screen.dart";
 import "../../admin_screens/UserScreen.dart";
+import "../../admin_screens/token_dashboard_screen.dart"; // ✅ ADDED
 
 class AdminSection extends StatelessWidget {
   const AdminSection({super.key});
@@ -20,11 +21,16 @@ class AdminSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
+
+            /// TITLE
             Text(
               "Admin Dashboard",
               style: AppTextStyles.appTitle,
             ),
+
             const SizedBox(height: 20),
+
+            /// GRID
             GridView(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -43,7 +49,7 @@ class AdminSection extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const UserScreen(),
+                        builder: (_) => const UserScreen(),
                       ),
                     );
                   },
@@ -57,7 +63,7 @@ class AdminSection extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const DepartmentScreen(),
+                        builder: (_) => const DepartmentScreen(),
                       ),
                     );
                   },
@@ -71,13 +77,13 @@ class AdminSection extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const ServiceScreen(),
+                        builder: (_) => const ServiceScreen(),
                       ),
                     );
                   },
                 ),
 
-                /// COUNTERS ✅ ADDED NAVIGATION
+                /// COUNTERS
                 AdminCard(
                   title: "Counters",
                   icon: Icons.confirmation_number_outlined,
@@ -85,7 +91,7 @@ class AdminSection extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const ManageCountersScreen(),
+                        builder: (_) => const ManageCountersScreen(),
                       ),
                     );
                   },
@@ -99,16 +105,24 @@ class AdminSection extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const AccessManagerScreen(),
+                        builder: (_) => const AccessManagerScreen(),
                       ),
                     );
                   },
                 ),
 
-                /// TOKEN DASHBOARD
+                /// TOKEN DASHBOARD ✅ FIXED
                 AdminCard(
                   title: "Dash Token",
                   icon: Icons.vpn_key_outlined,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TokenDashboardScreen(),
+                      ),
+                    );
+                  },
                 ),
 
                 /// BANNERS
@@ -119,7 +133,7 @@ class AdminSection extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const AdminBannerScreen(),
+                        builder: (_) => const AdminBannerScreen(),
                       ),
                     );
                   },

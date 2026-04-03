@@ -21,8 +21,6 @@ void main() async {
   final roles =
       rolesString.contains(',') ? rolesString.split(',') : [rolesString];
 
-  print("🚀 App starting with userId: $userId, roles: $roles");
-
   // ----------------- SOCKET INIT (GLOBAL ONLY) -----------------
   final socketService = SocketService();
 
@@ -32,7 +30,6 @@ void main() async {
   );
 
   await socketService.connect();
-  print("✅ Socket connected globally");
 
   runApp(const MyApp());
 }
@@ -65,21 +62,13 @@ class _MyAppState extends State<MyApp> {
 
       _linkSub = _appLinks.uriLinkStream.listen(
         (Uri uri) => _handleUri(uri),
-        onError: (err) {
-          debugPrint('Deep link error: $err');
-        },
+        onError: (err) {},
       );
-
-      print("✅ Deep link listener initialized");
-    } catch (e) {
-      debugPrint('Failed to init deep links: $e');
-    }
+    } catch (e) {}
   }
 
   void _handleUri(Uri? uri) {
     if (uri == null) return;
-
-    debugPrint('🔗 Deep link received: $uri');
 
     if (uri.scheme == 'queueless' &&
         uri.host == 'app' &&
@@ -88,7 +77,6 @@ class _MyAppState extends State<MyApp> {
         AppRoutes.login,
         (_) => false,
       );
-      print("➡ Navigated to login via deep link");
     }
   }
 
@@ -96,7 +84,6 @@ class _MyAppState extends State<MyApp> {
   void dispose() {
     _linkSub?.cancel();
     super.dispose();
-    print("🛑 App disposed, deep link subscription cancelled");
   }
 
   // =======================================================

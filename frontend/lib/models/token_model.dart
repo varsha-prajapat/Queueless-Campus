@@ -121,7 +121,7 @@ class TokenModel {
     );
   }
 
-  get calledCount => null;
+  Null get calledCount => null;
 
   /// Convert object to JSON
   Map<String, dynamic> toJson() {

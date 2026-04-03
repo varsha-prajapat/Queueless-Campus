@@ -22,17 +22,12 @@ class DepartmentService {
       throw Exception("User not authenticated");
     }
 
-    print("GET URL: $baseUrl");
-
     final response = await http.get(
       Uri.parse(baseUrl),
       headers: {
         "Authorization": "Bearer $token",
       },
     );
-
-    print("GET Status: ${response.statusCode}");
-    print("GET Body: ${response.body}");
 
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body);
@@ -57,8 +52,6 @@ class DepartmentService {
       throw Exception("User not authenticated");
     }
 
-    print("POST URL: $baseUrl");
-
     final response = await http.post(
       Uri.parse(baseUrl),
       headers: {
@@ -70,9 +63,6 @@ class DepartmentService {
         "status": status,
       }),
     );
-
-    print("POST Status: ${response.statusCode}");
-    print("POST Body: ${response.body}");
 
     if (response.statusCode != 201 && response.statusCode != 200) {
       throw Exception(
@@ -89,7 +79,6 @@ class DepartmentService {
     String name,
     String status,
   ) async {
-    print("Updating ID: $id");
     final token = await _getToken();
 
     if (token == null) {
@@ -102,9 +91,6 @@ class DepartmentService {
 
     final updateUrl = "$baseUrl/$id";
 
-    print("PUT URL: $updateUrl");
-    print("Updating ID: $id");
-
     final response = await http.put(
       Uri.parse(updateUrl),
       headers: {
@@ -116,9 +102,6 @@ class DepartmentService {
         "status": status,
       }),
     );
-
-    print("PUT Status: ${response.statusCode}");
-    print("PUT Body: ${response.body}");
 
     if (response.statusCode != 200) {
       throw Exception(
@@ -142,8 +125,6 @@ class DepartmentService {
     }
 
     final deleteUrl = "$baseUrl/$id";
-
-    print("DELETE URL: $deleteUrl");
 
     final response = await http.delete(
       Uri.parse(deleteUrl),

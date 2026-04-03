@@ -157,7 +157,7 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
 
                     /// SERVICE DROPDOWN
                     DropdownButtonFormField<String>(
-                      value: selectedServiceId,
+                      initialValue: selectedServiceId,
                       hint: const Text("Select Service"),
                       items: activeServices.map((s) {
                         String deptName = "";
@@ -250,7 +250,7 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
                         const Text("Active"),
                         Switch(
                           value: isActive,
-                          activeColor: lightPurple,
+                          activeThumbColor: lightPurple,
                           onChanged: (val) {
                             setDialogState(() {
                               isActive = val;

@@ -36,9 +36,6 @@ class CounterService {
         },
       );
 
-      print("Status Code: ${response.statusCode}");
-      print("Body: ${response.body}");
-
       if (response.statusCode != 200) {
         throw Exception("Failed to load counters");
       }
@@ -53,14 +50,11 @@ class CounterService {
         dataList = decoded;
       }
 
-      print("dataList: $dataList");
-
       List<CounterModel> counters =
           dataList.map((e) => CounterModel.fromJson(e)).toList();
 
       return counters.where((counter) => counter.isActive == true).toList();
     } catch (e) {
-      print("CounterService Error: $e");
       throw Exception("Error loading counters: $e");
     }
   }
@@ -105,7 +99,6 @@ class CounterService {
 
       return "Unknown Service";
     } catch (e) {
-      print("ServiceName Error: $e");
       return "Unknown Service";
     }
   }

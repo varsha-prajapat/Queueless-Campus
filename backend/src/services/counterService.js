@@ -2,7 +2,8 @@
 import Counter from "../models/counterModel.js";
 import Service from "../models/serviceModel.js";
 import mongoose from "mongoose";
-import { createNotification } from "./notificationService.js";
+import Token from "../models/tokenModel.js";
+import { sendNotification } from "./communicationService.js";
 
 /**
  * ➕ Create a new counter

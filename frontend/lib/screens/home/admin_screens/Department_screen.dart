@@ -114,7 +114,7 @@ class _DepartmentScreenState extends State<DepartmentScreen> {
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      value: status,
+                      initialValue: status,
                       decoration: InputDecoration(
                         labelText: "Status",
                         border: OutlineInputBorder(

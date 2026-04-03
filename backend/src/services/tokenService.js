@@ -76,14 +76,20 @@ export const createToken = async (
       }
     }
 
-    // ---------------- 🔥 TOKEN NUMBER GENERATION (NO COUNTER FIELD) ----------------
+    // ---------------- TOKEN NUMBER ----------------
     const lastToken = await Token.findOne({
       counterId: selectedCounter._id,
     })
-      .sort({ tokenNumber: -1 }) // highest first
+      .sort({ tokenNumber: -1 })
       .select("tokenNumber");
 
     const tokenNumber = lastToken ? lastToken.tokenNumber + 1 : 1;
+
+    // ---------------- 🔥 PAYMENT LOGIC ----------------
+    const totalAmount = service.fee || 0;
+
+    const paymentStatus = totalAmount === 0 ? "paid" : "pending";
+    const status = totalAmount === 0 ? "waiting" : "waiting_payment";
 
     // ---------------- CREATE TOKEN ----------------
     const token = await Token.create({
@@ -91,7 +97,11 @@ export const createToken = async (
       serviceId: service._id,
       counterId: selectedCounter._id,
       tokenNumber,
-      status: service.hasFee ? "waiting_payment" : "waiting",
+
+      totalAmount,
+      paymentStatus,
+      status,
+
       isUrgent,
     });
 
@@ -115,6 +125,7 @@ export const createToken = async (
       io,
     });
 
+    // ---------------- ADMIN UPDATE ----------------
     await getAdminQueueDetails(io);
 
     return token;
@@ -453,10 +464,12 @@ export const cancelToken = async (tokenId, studentId, io = null) => {
 };
 export const confirmPayment = async (tokenId, studentId, io = null) => {
   try {
+    // ---------------- VALIDATION ----------------
     if (!tokenId || !studentId) {
       throw new Error("Token ID and Student ID required");
     }
 
+    // ---------------- FIND TOKEN ----------------
     const token = await Token.findOne({
       _id: tokenId,
       studentId,
@@ -466,19 +479,19 @@ export const confirmPayment = async (tokenId, studentId, io = null) => {
       throw new Error("Token not found");
     }
 
-    // ❌ already processed cases
+    // ---------------- CHECK STATUS ----------------
     if (token.status !== "waiting_payment") {
       throw new Error("Payment is not required for this token");
     }
 
-    // ✅ update status
+    // ---------------- ✅ UPDATE PAYMENT ----------------
     token.status = "waiting";
     token.paymentStatus = "paid";
-    token.paymentConfirmedAt = new Date();
+    token.paidAt = new Date(); // ✅ FIXED (was paymentConfirmedAt)
 
     await token.save();
 
-    // 🔔 1. Notify Student
+    // ---------------- 🔔 NOTIFY STUDENT ----------------
     await sendNotification({
       title: "Payment Successful",
       message: `Payment confirmed for Token ${token.tokenNumber}.`,
@@ -488,9 +501,8 @@ export const confirmPayment = async (tokenId, studentId, io = null) => {
       tokenNumber: token.tokenNumber,
       io,
     });
-    await getAdminQueueDetails(io);
 
-    // 🔔 2. Notify Staff / Counter
+    // ---------------- 🔔 NOTIFY COUNTER ----------------
     if (token.counterId) {
       await sendNotification({
         title: "Payment Received",
@@ -503,10 +515,9 @@ export const confirmPayment = async (tokenId, studentId, io = null) => {
       });
     }
 
-    // 📡 3. Socket event (global token update)
+    // ---------------- 📡 SOCKET EVENTS ----------------
     emitTokenEvent(token, "token:paymentConfirmed", io);
 
-    // 📡 4. Socket event for staff/counter dashboard
     if (token.counterId && io) {
       io.to(`counter_${token.counterId}`).emit("counter:paymentConfirmed", {
         tokenId: token._id,
@@ -518,18 +529,17 @@ export const confirmPayment = async (tokenId, studentId, io = null) => {
       });
     }
 
-    // 📊 5. Update student stats
+    // ---------------- 📊 UPDATE STATS ----------------
     await emitStudentStats(studentId, io);
 
-    // 📊 6. Optional: update counter stats
-    if (token.counterId) {
+    if (token.counterId && io) {
       io.to(`counter_${token.counterId}`).emit("counter:statsUpdate", {
         type: "payment_confirmed",
         tokenId: token._id,
       });
     }
 
-    // 📡 7. Update admin queue details
+    // ---------------- 📡 ADMIN UPDATE ----------------
     await getAdminQueueDetails(io);
 
     return {
@@ -548,12 +558,17 @@ export const getAdminQueueDetails = async (io = null) => {
 
     const result = [];
 
-    // 🔥 GLOBAL COUNTERS
+    /// 🔥 GLOBAL COUNTERS
     let totalWaiting = 0;
     let totalServing = 0;
     let totalCompleted = 0;
     let totalCancelled = 0;
     let totalSkipped = 0;
+
+    /// 🔥 PAYMENT GLOBAL
+    let totalPayment = 0;
+    let totalUnpaid = 0;
+    let totalTokens = 0;
 
     for (const counter of counters) {
       const tokens = await Token.find({
@@ -564,18 +579,31 @@ export const getAdminQueueDetails = async (io = null) => {
         .sort({ isUrgent: -1, createdAt: 1 })
         .lean();
 
+      /// 🔥 BASIC COUNTS
       const waiting = tokens.filter((t) => t.status === "waiting").length;
-      const serving = tokens.find((t) => t.status === "serving") || null;
+      const servingToken = tokens.find((t) => t.status === "serving") || null;
+
       const completed = tokens.filter((t) => t.status === "completed").length;
       const cancelled = tokens.filter((t) => t.status === "cancelled").length;
       const skipped = tokens.filter((t) => t.status === "skipped").length;
 
-      // 🔥 ADD TO GLOBAL TOTALS
+      /// 🔥 PAYMENT LOGIC (FIXED)
+      const unpaid = tokens.filter((t) => t.paymentStatus !== "paid").length;
+
+      const counterPayment = tokens.reduce((sum, t) => {
+        return t.paymentStatus === "paid" ? sum + (t.totalAmount || 0) : sum;
+      }, 0);
+
+      /// 🔥 GLOBAL ADD
       totalWaiting += waiting;
-      totalServing += serving ? 1 : 0;
+      totalServing += servingToken ? 1 : 0;
       totalCompleted += completed;
       totalCancelled += cancelled;
       totalSkipped += skipped;
+
+      totalPayment += counterPayment;
+      totalUnpaid += unpaid;
+      totalTokens += tokens.length;
 
       result.push({
         counterId: counter._id,
@@ -583,34 +611,60 @@ export const getAdminQueueDetails = async (io = null) => {
 
         summary: {
           waiting,
-          serving: serving?.tokenNumber || "-",
+          serving: servingToken?.tokenNumber || "-",
           completed,
           cancelled,
           skipped,
+
+          /// 🔥 PAYMENT
+          unpaid,
+          totalPayment: counterPayment,
         },
 
-        currentToken: serving
+        currentToken: servingToken
           ? {
-              tokenId: serving._id,
-              tokenNumber: serving.tokenNumber,
-              student: serving.studentId,
-              service: serving.serviceId,
-              status: serving.status,
-              servingStartedAt: serving.servingStartedAt,
+              tokenId: servingToken._id,
+              tokenNumber: servingToken.tokenNumber,
+              student: servingToken.studentId,
+              service: servingToken.serviceId,
+              status: servingToken.status,
+              servingStartedAt: servingToken.servingStartedAt,
+
+              /// 🔥 PAYMENT
+              paymentAmount: servingToken.totalAmount || 0,
+              paymentStatus: servingToken.paymentStatus,
             }
           : null,
 
-        queue: tokens,
+        queue: tokens.map((t) => ({
+          tokenId: t._id,
+          tokenNumber: t.tokenNumber,
+          studentId: t.studentId,
+          serviceId: t.serviceId,
+          status: t.status,
+          isUrgent: t.isUrgent,
+
+          /// 🔥 PAYMENT (FIXED)
+          paymentAmount: t.totalAmount || 0,
+          paymentStatus: t.paymentStatus,
+
+          createdAt: t.createdAt,
+        })),
       });
     }
 
-    // 🔥 FINAL GLOBAL SUMMARY
+    /// 🔥 FINAL GLOBAL SUMMARY
     const globalStats = {
       totalWaiting,
       totalServing,
       totalCompleted,
       totalCancelled,
       totalSkipped,
+
+      /// 🔥 PAYMENT
+      totalPayment,
+      totalUnpaid,
+      totalTokens,
     };
 
     const response = {
@@ -618,7 +672,7 @@ export const getAdminQueueDetails = async (io = null) => {
       counters: result,
     };
 
-    // 📡 REAL-TIME ADMIN UPDATE
+    /// 📡 REAL-TIME ADMIN UPDATE
     if (io) {
       io.to("role_ADMIN").emit("admin:queue:update", response);
     }

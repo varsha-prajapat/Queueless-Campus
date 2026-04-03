@@ -218,8 +218,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             ? FileImage(profileImage!) as ImageProvider
                             : networkImage != null && networkImage!.isNotEmpty
                                 ? NetworkImage(
-                                    networkImage! +
-                                        "?v=${DateTime.now().millisecondsSinceEpoch}",
+                                    "${networkImage!}?v=${DateTime.now().millisecondsSinceEpoch}",
                                   ) as ImageProvider
                                 : null,
                         child: profileImage == null &&

@@ -5,6 +5,7 @@ import '../screens/home_screen.dart';
 import '../shared/screens/settings_screen.dart';
 import '../shared/screens/notification_screen.dart';
 import '../../provider/notification_provider.dart';
+import '../../utils/auth_role_helper.dart';
 
 class BottomNav extends StatefulWidget {
   const BottomNav({super.key});
@@ -16,16 +17,45 @@ class BottomNav extends StatefulWidget {
 class _BottomNavState extends State<BottomNav> {
   int index = 0;
 
+  String? role;
+  bool _loaded = false;
+
   static const Color primary = Color(0xFF1F5F5B);
   static const Color bgLight = Color(0xFFF6FAF9);
 
   bool _initialized = false;
 
-  final List<Widget> screens = const [
-    HomeScreen(),
-    NotificationScreen(),
-    SettingsScreen(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadRole();
+  }
+
+  Future<void> _loadRole() async {
+    final r = await AuthRoleHelper.getRole();
+
+    if (!mounted) return;
+
+    setState(() {
+      role = r;
+      _loaded = true;
+    });
+  }
+
+  List<Widget> get screens {
+    if (_loaded && role == "ADMIN") {
+      return const [
+        HomeScreen(),
+        SettingsScreen(),
+      ];
+    } else {
+      return const [
+        HomeScreen(),
+        NotificationScreen(),
+        SettingsScreen(),
+      ];
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -34,7 +64,11 @@ class _BottomNavState extends State<BottomNav> {
     if (_initialized) return;
 
     final provider = Provider.of<NotificationProvider>(context, listen: false);
-    provider.initSocketListener();
+
+    // ❌ ADMIN ke liye socket OFF
+    if (role != "ADMIN") {
+      provider.initSocketListener();
+    }
 
     _initialized = true;
   }
@@ -48,10 +82,15 @@ class _BottomNavState extends State<BottomNav> {
       index = newIndex;
     });
 
-    // ✅ FIX: CALL WHEN LEAVING NOTIFICATION SCREEN
-    if (previousIndex == 1 && newIndex != 1) {
-      await Future.delayed(const Duration(milliseconds: 200));
-      provider.markAllAsRead();
+    // ❌ ADMIN skip
+    if (_loaded && role != "ADMIN") {
+      if (previousIndex == 1 && newIndex != 1) {
+        await Future.delayed(const Duration(milliseconds: 200));
+
+        if (!mounted) return;
+
+        provider.markAllAsRead();
+      }
     }
   }
 
@@ -67,31 +106,51 @@ class _BottomNavState extends State<BottomNav> {
             index: index,
             children: screens,
           ),
-          bottomNavigationBar: BottomNavigationBar(
-            currentIndex: index,
-            onTap: _handleTabChange,
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: Colors.white,
-            elevation: 10,
-            selectedItemColor: primary,
-            unselectedItemColor: Colors.grey.shade400,
-            items: [
-              _navItem(
-                label: "Home",
-                icon: Icons.dashboard_outlined,
-                active: index == 0,
-              ),
-              _notificationItem(
-                active: index == 1,
-                count: unread,
-              ),
-              _navItem(
-                label: "Settings",
-                icon: Icons.settings_outlined,
-                active: index == 2,
-              ),
-            ],
-          ),
+          bottomNavigationBar: (_loaded && role == "ADMIN")
+              ? BottomNavigationBar(
+                  currentIndex: index,
+                  onTap: _handleTabChange,
+                  type: BottomNavigationBarType.fixed,
+                  backgroundColor: Colors.white,
+                  selectedItemColor: primary,
+                  unselectedItemColor: Colors.grey.shade400,
+                  items: [
+                    _navItem(
+                      label: "Home",
+                      icon: Icons.dashboard_outlined,
+                      active: index == 0,
+                    ),
+                    _navItem(
+                      label: "Settings",
+                      icon: Icons.settings_outlined,
+                      active: index == 1,
+                    ),
+                  ],
+                )
+              : BottomNavigationBar(
+                  currentIndex: index,
+                  onTap: _handleTabChange,
+                  type: BottomNavigationBarType.fixed,
+                  backgroundColor: Colors.white,
+                  selectedItemColor: primary,
+                  unselectedItemColor: Colors.grey.shade400,
+                  items: [
+                    _navItem(
+                      label: "Home",
+                      icon: Icons.dashboard_outlined,
+                      active: index == 0,
+                    ),
+                    _notificationItem(
+                      active: index == 1,
+                      count: unread,
+                    ),
+                    _navItem(
+                      label: "Settings",
+                      icon: Icons.settings_outlined,
+                      active: index == 2,
+                    ),
+                  ],
+                ),
         );
       },
     );
@@ -108,7 +167,7 @@ class _BottomNavState extends State<BottomNav> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: active ? primary.withOpacity(0.12) : null,
+          color: active ? primary.withValues(alpha: 0.12) : null,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(icon),
@@ -137,7 +196,7 @@ class _BottomNavState extends State<BottomNav> {
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: active ? primary.withOpacity(0.12) : null,
+              color: active ? primary.withValues(alpha: 0.12) : null,
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.notifications_outlined),

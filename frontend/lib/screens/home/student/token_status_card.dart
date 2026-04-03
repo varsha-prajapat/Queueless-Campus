@@ -25,7 +25,6 @@ class _TokenStatusCardState extends State<TokenStatusCard> {
 
     // Listen for all relevant token events
     _notifSub = _socket.notifStream.listen((data) async {
-      print("🔔 Socket notification received: $data");
       await _refreshTokenStats();
     });
 

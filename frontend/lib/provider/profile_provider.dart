@@ -58,12 +58,10 @@ class ProfileProvider extends ChangeNotifier {
             Department? dept =
                 await DepartmentService().getDepartmentById(deptId);
 
-            if (dept?.name != null && dept!.name!.isNotEmpty) {
-              department = dept.name!;
+            if (dept?.name != null && dept!.name.isNotEmpty) {
+              department = dept.name;
             }
-          } catch (e) {
-            print("Department fetch failed ($deptId): $e");
-          }
+          } catch (e) {}
         }
       }
 
@@ -71,8 +69,6 @@ class ProfileProvider extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      print("Error fetching profile: $e");
-
       /// Reset only if full API fails
       name = "User";
       phone = "";
@@ -101,7 +97,6 @@ class ProfileProvider extends ChangeNotifier {
 
       await fetchProfile(); // refresh
     } catch (e) {
-      print("Error updating profile: $e");
       rethrow;
     }
   }

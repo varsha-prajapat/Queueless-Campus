@@ -173,7 +173,7 @@ class _AccessManagerScreenState extends State<AccessManagerScreen> {
                   ),
                   const SizedBox(height: 18),
                   DropdownButtonFormField<String>(
-                    value: selectedRole,
+                    initialValue: selectedRole,
                     decoration: input("Role", icon: Icons.badge_outlined),
                     hint: const Text("Select role"),
                     items: roles.map((r) {
@@ -190,7 +190,7 @@ class _AccessManagerScreenState extends State<AccessManagerScreen> {
                           child: CircularProgressIndicator(),
                         )
                       : DropdownButtonFormField<String>(
-                          value: selectedDepartment,
+                          initialValue: selectedDepartment,
                           decoration: input("Department",
                               icon: Icons.apartment_outlined),
                           hint: const Text("Select department"),

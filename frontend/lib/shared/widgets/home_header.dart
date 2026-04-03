@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/constants/app_constants.dart';
 import '../../provider/notification_provider.dart';
 import '../../shared/screens/notification_screen.dart';
 import '../../utils/auth_role_helper.dart';
