@@ -217,6 +217,7 @@ export const deleteService = async (req, res) => {
   try {
     const { id } = req.params;
 
+    /* ================= 🛑 VALIDATION ================= */
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
@@ -224,33 +225,35 @@ export const deleteService = async (req, res) => {
       });
     }
 
-    const service = await serviceService.deleteService(id);
+    /* ================= 🧠 DELETE SERVICE ================= */
+    const result = await serviceService.deleteService(id, req.io);
 
-    if (!service) {
+    /* ================= ⚠️ SAFETY CHECK ================= */
+    if (!result?.success) {
       return res.status(404).json({
         success: false,
-        message: "Service not found or already deleted",
+        message: result?.message || "Service not found or already deleted",
       });
     }
 
-    // Emit Socket.IO event
+    /* ================= 📡 SOCKET EVENT ================= */
     if (req.io) {
       req.io.emit("serviceDeleted", {
-        id: service._id,
-        name: service.name,
+        id,
       });
     }
 
+    /* ================= ✅ RESPONSE ================= */
     return res.status(200).json({
       success: true,
-      message: "Service deleted successfully",
+      message: result.message,
     });
   } catch (error) {
     console.error("DELETE SERVICE ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      message: error.message || "Internal Server Error",
+      message: "Internal Server Error",
     });
   }
 };

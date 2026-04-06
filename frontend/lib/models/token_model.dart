@@ -4,9 +4,9 @@ class TokenStats {
   final int waiting;
   final int servedToday;
   final int urgentWaiting;
-  final int completed; // new
-  final int cancelled; // new
-  final int skipped; // new
+  final int completed;
+  final int cancelled;
+  final int skipped;
 
   TokenStats({
     required this.currentToken,
@@ -19,7 +19,6 @@ class TokenStats {
     this.skipped = 0,
   });
 
-  /// Empty/default stats
   factory TokenStats.empty() {
     return TokenStats(
       currentToken: "-",
@@ -33,7 +32,6 @@ class TokenStats {
     );
   }
 
-  /// Parse JSON into TokenStats
   factory TokenStats.fromJson(Map<String, dynamic>? json) {
     if (json == null) return TokenStats.empty();
     return TokenStats(
@@ -60,8 +58,9 @@ class TokenModel {
   String status;
   final bool isUrgent;
   final String? serviceId;
+  final String? serviceName; // ✅ NEW
   final String? studentId;
-  final String? counterId; // ✅ Added
+  final String? counterId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -71,13 +70,13 @@ class TokenModel {
     required this.status,
     this.isUrgent = false,
     this.serviceId,
+    this.serviceName, // ✅ NEW
     this.studentId,
-    this.counterId, // ✅ Added
+    this.counterId,
     this.createdAt,
     this.updatedAt,
   });
 
-  /// Factory to parse JSON robustly
   factory TokenModel.fromJson(Map<String, dynamic> json, {String? studentId}) {
     String parseId() {
       if (json["tokenId"] != null) return json["tokenId"].toString();
@@ -92,6 +91,11 @@ class TokenModel {
             serviceField["id"]?.toString();
       }
       return serviceField.toString();
+    }
+
+    String? parseServiceName(dynamic nameField) {
+      if (nameField == null) return null;
+      return nameField.toString();
     }
 
     DateTime? parseDate(dynamic field) {
@@ -114,8 +118,9 @@ class TokenModel {
       status: parseStatus(json["status"]),
       isUrgent: json["isUrgent"] is bool ? json["isUrgent"] : false,
       serviceId: parseServiceId(json["serviceId"] ?? json["service"]),
+      serviceName: parseServiceName(json["serviceName"]), // ✅ NEW
       studentId: studentId ?? json["studentId"]?.toString(),
-      counterId: json["counterId"]?.toString(), // ✅ Parse counterId
+      counterId: json["counterId"]?.toString(),
       createdAt: parseDate(json["createdAt"]),
       updatedAt: parseDate(json["updatedAt"]),
     );
@@ -123,7 +128,6 @@ class TokenModel {
 
   Null get calledCount => null;
 
-  /// Convert object to JSON
   Map<String, dynamic> toJson() {
     return {
       "id": id,
@@ -131,19 +135,19 @@ class TokenModel {
       "status": status,
       "isUrgent": isUrgent,
       "serviceId": serviceId,
+      "serviceName": serviceName, // ✅ NEW
       "studentId": studentId,
-      "counterId": counterId, // ✅ Include counterId in JSON
+      "counterId": counterId,
       "createdAt": createdAt?.toIso8601String(),
       "updatedAt": updatedAt?.toIso8601String(),
     };
   }
 
-  /// Display token with urgency label
   String displayToken() => isUrgent ? "$tokenNumber (Urgent)" : "$tokenNumber";
 
   @override
   String toString() {
-    return 'TokenModel(id: $id, number: $tokenNumber, status: $status, urgent: $isUrgent, serviceId: $serviceId, studentId: $studentId, counterId: $counterId, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'TokenModel(id: $id, number: $tokenNumber, status: $status, urgent: $isUrgent, serviceId: $serviceId, serviceName: $serviceName, studentId: $studentId, counterId: $counterId, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   TokenModel copyWith({
@@ -152,8 +156,9 @@ class TokenModel {
     String? status,
     bool? isUrgent,
     String? serviceId,
+    String? serviceName, // ✅ NEW
     String? studentId,
-    String? counterId, // ✅ Added
+    String? counterId,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -163,8 +168,9 @@ class TokenModel {
       status: status ?? this.status,
       isUrgent: isUrgent ?? this.isUrgent,
       serviceId: serviceId ?? this.serviceId,
+      serviceName: serviceName ?? this.serviceName, // ✅ NEW
       studentId: studentId ?? this.studentId,
-      counterId: counterId ?? this.counterId, // ✅ Added
+      counterId: counterId ?? this.counterId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

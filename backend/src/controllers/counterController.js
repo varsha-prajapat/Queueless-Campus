@@ -27,24 +27,27 @@ export const createCounter = async (req, res) => {
     // Ensure staffIds is an array
     const staffArray = Array.isArray(staffIds) ? staffIds : [staffIds];
 
-    const counter = await counterService.createCounter({
-      name,
-      serviceId,
-      staffIds: staffArray,
-      isActive,
-    });
+    const counter = await counterService.createCounter(
+      {
+        name,
+        serviceId,
+        staffIds: staffArray,
+        isActive,
+      },
+      req.io,
+    );
 
     // Emit real-time event
     if (req.io) {
       req.io.emit("counterCreated", counter);
     }
-
     res.status(201).json({
       success: true,
       message: "Counter created successfully",
       data: counter,
     });
   } catch (error) {
+    console.log(error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -92,7 +95,6 @@ export const getCountersByStaffId = async (req, res) => {
     }
 
     const counters = await counterService.getCountersByStaffId(staffId);
-
     res.status(200).json({ success: true, data: counters });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

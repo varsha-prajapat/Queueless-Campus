@@ -95,6 +95,8 @@ export const createToken = async (
     const token = await Token.create({
       studentId,
       serviceId: service._id,
+      serviceName: service.name,
+
       counterId: selectedCounter._id,
       tokenNumber,
 
@@ -108,15 +110,17 @@ export const createToken = async (
     // ---------------- SOCKET EVENTS ----------------
     if (io) {
       io.to(studentId.toString()).emit("token:new", token);
-      io.to("role_STAFF").emit("token:create", token);
+      io.to(`role_COUNTER_${token.counterId}`).emit("token:create", token);
       io.to("role_ADMIN").emit("token:new", token);
       io.emit("token:update", token);
     }
 
-    // ---------------- NOTIFICATION ----------------
+    // ---------------- 🔥 IMPROVED NOTIFICATION ----------------
+    const counterName = selectedCounter.name || "Counter";
+
     await sendNotification({
       title: "Token Created",
-      message: `Your token ${tokenNumber} created`,
+      message: `Token ${tokenNumber} no for ${service.name} is created at ${counterName} counter.`,
       type: "CREATED",
       counterId: token.counterId,
       tokenId: token._id,
@@ -164,15 +168,22 @@ export const callNextToken = async (counterId, io = null) => {
   next.status = "serving";
   next.servingStartedAt = new Date();
   await next.save();
+
+  // ---------------- 🔥 IMPROVED NOTIFICATION ----------------
+  const counter = await Counter.findById(counterId).select("name");
+  const counterName = counter?.name || "Counter";
+  const serviceName = next.serviceId?.name || next.serviceName || "Service";
+
   await sendNotification({
     title: "Your Turn",
-    message: `Token ${next.tokenNumber}, please come to the counter.`,
+    message: `Token ${next.tokenNumber} no for ${serviceName} is now called at ${counterName} counter. Please proceed to the counter.`,
     type: "CALLED",
     userId: next.studentId._id,
     tokenId: next._id,
     tokenNumber: next.tokenNumber,
     io,
   });
+
   await getAdminQueueDetails(io);
   emitTokenEvent(next, "token:called", io);
   await emitStudentStats(next.studentId._id, io);
@@ -182,7 +193,6 @@ export const callNextToken = async (counterId, io = null) => {
     token: next,
   };
 };
-
 /* ================= COMPLETE TOKEN ================= */
 export const completeToken = async (tokenId, io) => {
   const token = await Token.findById(tokenId);
@@ -192,18 +202,28 @@ export const completeToken = async (tokenId, io) => {
       `Token cannot be completed because current status is "${token.status}". It must be "serving".`,
     );
   }
+
   // ✅ mark as completed
   token.status = "completed";
   await token.save();
+
   await getAdminQueueDetails(io);
+
   // ✅ socket events
   emitTokenEvent(token, "token:completed", io);
   await emitStudentStats(token.studentId, io);
 
+  // ---------------- 🔥 IMPROVED NOTIFICATION ----------------
+  const service = await Service.findById(token.serviceId).select("name");
+  const counter = await Counter.findById(token.counterId).select("name");
+
+  const serviceName = service?.name || token.serviceName || "Service";
+  const counterName = counter?.name || "Counter";
+
   // ✅ notification (FINAL CONFIRMATION)
   await sendNotification({
     title: "Token Completed",
-    message: `Your token ${token.tokenNumber} has been completed successfully.`,
+    message: `Token ${token.tokenNumber} no for ${serviceName} at ${counterName} counter has been completed successfully.`,
     type: "INFO",
     userId: token.studentId,
     io,
@@ -223,18 +243,27 @@ export const skipToken = async (tokenId, io) => {
 
   token.status = "skipped";
   await token.save();
+
+  // ---------------- 🔥 IMPROVED NOTIFICATION ----------------
+  const service = await Service.findById(token.serviceId).select("name");
+  const counter = await Counter.findById(token.counterId).select("name");
+
+  const serviceName = service?.name || token.serviceName || "Service";
+  const counterName = counter?.name || "Counter";
+
   await sendNotification({
     title: "Token Skipped",
-    message: `Token ${token.tokenNumber} has been skipped.`,
+    message: `Token ${token.tokenNumber} no for ${serviceName} at ${counterName} counter has been skipped.`,
     type: "SKIPPED",
     userId: token.studentId,
     io,
   });
+
   await getAdminQueueDetails(io);
   emitTokenEvent(token, "token:skipped", io);
+
   return token;
 };
-
 /* ================= STAFF QUEUE ================= */
 export const getStaffQueue = async (counterId) => {
   const tokens = await Token.find({
@@ -443,15 +472,24 @@ export const cancelToken = async (tokenId, studentId, io = null) => {
     // 📊 update stats
     await emitStudentStats(studentId, io);
 
+    // ---------------- 🔥 IMPROVED NOTIFICATION ----------------
+    const service = await Service.findById(token.serviceId).select("name");
+    const counter = await Counter.findById(token.counterId).select("name");
+
+    const serviceName = service?.name || token.serviceName || "Service";
+    const counterName = counter?.name || "Counter";
+
     // ✅ NOTIFICATION → COUNTER ko milega
     await sendNotification({
       title: "Token Cancelled",
-      message: `Token ${token.tokenNumber} has been cancelled by student.`,
+      message: `Token ${token.tokenNumber} no for ${serviceName} at ${counterName} counter has been cancelled by student.`,
       type: "INFO",
-      counterId: token.counterId, // 👈 counter ko bhejna
+      counterId: token.counterId,
       io,
     });
+
     await getAdminQueueDetails(io);
+
     return {
       success: true,
       message: "Token cancelled successfully",
@@ -462,6 +500,7 @@ export const cancelToken = async (tokenId, studentId, io = null) => {
     throw err;
   }
 };
+
 export const confirmPayment = async (tokenId, studentId, io = null) => {
   try {
     // ---------------- VALIDATION ----------------
@@ -487,14 +526,22 @@ export const confirmPayment = async (tokenId, studentId, io = null) => {
     // ---------------- ✅ UPDATE PAYMENT ----------------
     token.status = "waiting";
     token.paymentStatus = "paid";
-    token.paidAt = new Date(); // ✅ FIXED (was paymentConfirmedAt)
+    token.paidAt = new Date();
 
     await token.save();
+
+    // ---------------- 🔥 FETCH EXTRA INFO ----------------
+    const service = await Service.findById(token.serviceId).select("name");
+    const counter = await Counter.findById(token.counterId).select("name");
+
+    const serviceName = service?.name || token.serviceName || "Service";
+    const counterName = counter?.name || "Counter";
+    const amount = token.totalAmount || 0;
 
     // ---------------- 🔔 NOTIFY STUDENT ----------------
     await sendNotification({
       title: "Payment Successful",
-      message: `Payment confirmed for Token ${token.tokenNumber}.`,
+      message: `Payment of ₹${amount} confirmed for Token ${token.tokenNumber} no  (${serviceName}) at ${counterName} counter.`,
       type: "PAYMENT_SUCCESS",
       userId: studentId,
       tokenId: token._id,
@@ -506,7 +553,7 @@ export const confirmPayment = async (tokenId, studentId, io = null) => {
     if (token.counterId) {
       await sendNotification({
         title: "Payment Received",
-        message: `Payment received for Token ${token.tokenNumber}.`,
+        message: `₹${amount} received for Token ${token.tokenNumber} no  (${serviceName}) at ${counterName} counter.`,
         type: "PAYMENT_RECEIVED",
         counterId: token.counterId,
         tokenId: token._id,

@@ -6,6 +6,7 @@ export const adminController = {
   // ================= INVITE USER =================
   inviteUser: async (req, res, next) => {
     try {
+      console.log("req.body:", req.body);
       const result = await adminService.inviteUser(req.body);
 
       if (req.io) req.io.emit("userInvited", result);

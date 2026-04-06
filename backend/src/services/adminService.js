@@ -6,10 +6,13 @@ import ApiError from "../utils/ApiError.js";
 import { STATUS } from "../config/status.js";
 import { sendInviteEmail } from "./send_invite_Email.js";
 import jwt from "jsonwebtoken";
+import Department from "../models/DepartmentModel.js";
 
 export const adminService = {
   // ================= INVITE USER =================
-  inviteUser: async ({ name, email, role, departmentId }) => {
+  inviteUser: async ({ email, role, departmentId }) => {
+    /* ================= 🔍 VALIDATION ================= */
+
     if (!email || !role) {
       throw new ApiError(
         STATUS.ERROR.BAD_REQUEST.statusCode,
@@ -34,40 +37,64 @@ export const adminService = {
       throw new ApiError(STATUS.ERROR.BAD_REQUEST.statusCode, "Invalid role");
     }
 
-    if (departmentId && !mongoose.Types.ObjectId.isValid(departmentId)) {
-      throw new ApiError(
-        STATUS.ERROR.BAD_REQUEST.statusCode,
-        "Invalid department ID",
-      );
+    /* ================= 🏢 DEPARTMENT FETCH ================= */
+
+    let departmentName = null;
+
+    if (departmentId) {
+      if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+        throw new ApiError(
+          STATUS.ERROR.BAD_REQUEST.statusCode,
+          "Invalid department ID",
+        );
+      }
+
+      const department = await Department.findById(departmentId);
+
+      if (!department) {
+        throw new ApiError(
+          STATUS.ERROR.NOT_FOUND.statusCode,
+          "Department not found",
+        );
+      }
+
+      departmentName = department.name; // ✅ name extract
     }
+
+    /* ================= 🔐 TOKEN GENERATION ================= */
 
     const token = jwt.sign(
       {
         email,
         role,
-        departmentId: departmentId,
+        departmentId: departmentId || null,
+        department: departmentName, // ✅ store name also
         type: "invite",
       },
       env.JWT_INVITE_SECRET,
       { expiresIn: "1h" },
     );
 
+    /* ================= 🔗 INVITE LINK ================= */
+
     const registrationLink = `${env.BASE_URL}${env.API_PREFIX}/invite/${token}`;
 
+    /* ================= 📧 SEND EMAIL ================= */
+
     await sendInviteEmail({
-      name,
       email,
       registrationLink,
       role,
-      departmentId,
+      department: departmentName, // ✅ email me name bhejo
     });
+
+    /* ================= ✅ RESPONSE ================= */
 
     return {
       success: true,
       message: "Invitation sent successfully",
     };
   },
-
   // ================= SEED SUPER ADMIN =================
   seedSuperAdmin: async () => {
     const enabled = String(env.SUPER_ADMIN_ENABLED || "true") === "true";

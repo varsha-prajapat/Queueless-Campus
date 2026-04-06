@@ -101,12 +101,17 @@ class _StaffSectionState extends State<StaffSection> {
 
   Future<void> _checkCounterAssigned() async {
     try {
-      final counters =
+      debugPrint(
+          "🔍 Checking counter assignment for staffId: ${widget.staffId}");
+
+      final counter =
           await CounterService.getUserCounters(staffId: widget.staffId);
 
       if (!mounted) return;
-      setState(() => _counterAssigned = counters.isNotEmpty);
-    } catch (e) {}
+      setState(() => _counterAssigned = counter.isNotEmpty);
+    } catch (e) {
+      debugPrint("🚨 Error in _checkCounterAssigned: $e");
+    }
   }
 
   Future<void> _loadAllTokens() async {

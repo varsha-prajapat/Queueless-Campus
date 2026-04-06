@@ -37,11 +37,9 @@ class _AdminContactCardState extends State<AdminContactCard> {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasDepartment = widget.departmentId != null &&
-        widget.departmentId!.trim().isNotEmpty &&
-        widget.departmentId!.trim().toLowerCase() != "null";
-
     final bool hasCounter = widget.counterAssigned ?? false;
+    final bool hasDepartment =
+        widget.departmentId != null && widget.departmentId!.isNotEmpty;
 
     return FutureBuilder<UserModel?>(
       future: _adminFuture,
@@ -68,33 +66,30 @@ class _AdminContactCardState extends State<AdminContactCard> {
 
         final admin = snapshot.data!;
 
-        /// ================= CASE 1: NO DEPARTMENT =================
+        /// ❌ CASE 1: DEPARTMENT MISSING
         if (!hasDepartment) {
           return _buildAdminCard(
             admin,
-            message: "⚠ Department not assigned. Please contact administrator.",
-            showDepartment: false,
+            message: " Department not assigned. Please contact administrator.",
           );
         }
 
-        /// ================= CASE 2: COUNTER INACTIVE =================
+        /// ❌ CASE 2: COUNTER MISSING (BUT DEPARTMENT EXISTS)
         if (!hasCounter) {
           return _buildAdminCard(
             admin,
-            message: "⚠ Contact admin to activate your counter.",
-            showDepartment: true,
+            message: " Counter not assigned. Please contact administrator.",
           );
         }
 
-        /// ================= CASE 3: ACTIVE =================
+        /// ✅ CASE 3: ALL GOOD
         return _buildStaffCard(admin);
       },
     );
   }
 
   /// ================= ADMIN CARD =================
-  Widget _buildAdminCard(UserModel admin,
-      {required String message, required bool showDepartment}) {
+  Widget _buildAdminCard(UserModel admin, {required String message}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       padding: const EdgeInsets.all(16),
@@ -104,7 +99,6 @@ class _AdminContactCardState extends State<AdminContactCard> {
       ),
       child: Column(
         children: [
-          /// 🔥 SAFE AVATAR (ICON FALLBACK FIXED)
           CircleAvatar(
             radius: 30,
             backgroundColor: Colors.lightBlue.shade100,
@@ -115,29 +109,14 @@ class _AdminContactCardState extends State<AdminContactCard> {
                 ? const Icon(Icons.person, size: 30, color: Colors.lightBlue)
                 : null,
           ),
-
           const SizedBox(height: 12),
-
           const Text(
             "Contact Administrator",
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-
-          const SizedBox(height: 6),
-
-          Text(
-            showDepartment
-                ? "Department ID: ${widget.departmentId}"
-                : "No department assigned",
-            textAlign: TextAlign.center,
-          ),
-
           const SizedBox(height: 12),
-
           _buildMessageBanner(message),
-
           const SizedBox(height: 12),
-
           ..._buildAdminInfo(admin),
         ],
       ),

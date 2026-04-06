@@ -115,7 +115,7 @@ class CounterCard extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(
-                    isActive ? Icons.circle : Icons.circle_outlined,
+                    isActive ? Icons.circle : Icons.circle,
                     size: 10,
                     color: isActive
                         ? const Color(0xFF2E7D32)

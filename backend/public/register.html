@@ -6,253 +6,318 @@
   <title>QueueLess Campus – Register</title>
 
   <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      background: #f4fbf9;
-      color: #0f172a;
-    }
-    .page {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-    }
-    .card {
-      width: 100%;
-      max-width: 420px;
-      background: #ffffff;
-      border-radius: 18px;
-      padding: 36px 32px;
-      box-shadow: 0 10px 25px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04);
-    }
-    .logo {
-      text-align: center;
-      margin-bottom: 10px;
-      font-size: 26px;
-      font-weight: 700;
-      color: #064e3b;
-    }
-    .subtitle {
-      text-align: center;
-      font-size: 14px;
-      color: #64748b;
-      margin-bottom: 28px;
-    }
-    label {
-      display: block;
-      font-size: 13px;
-      font-weight: 500;
-      margin: 16px 0 6px;
-      color: #334155;
-    }
-    input {
-      width: 100%;
-      padding: 14px;
-      font-size: 15px;
-      border-radius: 12px;
-      border: 1px solid #cbd5e1;
-      outline: none;
-    }
-    input:focus {
-      border-color: #16a34a;
-      box-shadow: 0 0 0 2px rgba(22,163,74,.2);
-    }
-    input:disabled {
-      background: #f1f5f9;
-      color: #475569;
-      cursor: not-allowed;
-    }
-    input.error { border-color: #ef4444; }
-    button {
-      width: 100%;
-      margin-top: 28px;
-      padding: 14px;
-      border-radius: 12px;
-      border: none;
-      background: #16a34a;
-      color: #fff;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    button:disabled {
-      background: #cbd5e1;
-      cursor: not-allowed;
-    }
-    .popup-backdrop {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(15,23,42,.45);
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-    .popup {
-      background: white;
-      width: 100%;
-      max-width: 340px;
-      padding: 22px;
-      border-radius: 14px;
-      text-align: center;
-      box-shadow: 0 12px 30px rgba(0,0,0,.18);
-    }
-    .popup p {
-      font-size: 14px;
-      margin-bottom: 16px;
-    }
-    .popup button {
-      padding: 10px;
-      border-radius: 8px;
-    }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 360px;
+    background: #fff;
+    border-radius: 18px;
+    padding: 28px 24px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    animation: fadeIn 0.4s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .logo {
+    text-align: center;
+    font-size: 22px;
+    font-weight: 700;
+    color: #065f46;
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: #64748b;
+    margin-bottom: 20px;
+  }
+
+  label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #334155;
+    margin-top: 12px;
+    display: block;
+  }
+
+  input {
+    width: 100%;
+    padding: 11px;
+    margin-top: 5px;
+    border-radius: 10px;
+    border: 1px solid #cbd5e1;
+    font-size: 13px;
+  }
+
+  input:focus {
+    border-color: #16a34a;
+    box-shadow: 0 0 0 2px rgba(22,163,74,.2);
+  }
+
+  input:disabled {
+    background: #f1f5f9;
+  }
+
+  input.error {
+    border-color: #ef4444;
+  }
+
+  /* ===== PASSWORD FIELD WRAP ===== */
+  .password-wrap {
+    position: relative;
+  }
+
+  .password-wrap input {
+    padding-right: 40px;
+  }
+
+  .eye-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+    fill: #64748b;
+  }
+
+  .eye-icon:hover {
+    fill: #16a34a;
+  }
+
+  button {
+    width: 100%;
+    margin-top: 20px;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(135deg, #16a34a, #22c55e);
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  button:disabled {
+    background: #cbd5e1;
+    cursor: not-allowed;
+  }
+
+  .popup-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.5);
+    align-items: center;
+    justify-content: center;
+  }
+
+  .popup {
+    background: #fff;
+    padding: 18px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 300px;
+    text-align: center;
+  }
   </style>
 </head>
 
 <body>
-  <div class="page">
-    <div class="card">
-      <div class="logo">Queueless Campus</div>
-      <div class="subtitle">Complete your account</div>
 
-      <label>Email</label>
-      <input id="email" disabled />
+<div class="card">
+  <div class="logo">QueueLess Campus</div>
+  <div class="subtitle">Complete your account setup</div>
 
-      <label>Role</label>
-      <input id="role" disabled />
+  <label>Email</label>
+  <input id="email" disabled />
 
-      <label>Department</label>
-      <input id="department" disabled />
+  <label>Role</label>
+  <input id="role" disabled />
 
-      <label>Full Name</label>
-      <input id="name" placeholder="Enter your full name" />
+  <label>Department</label>
+  <input id="department" disabled />
 
-      <label>Password</label>
-      <input id="password" type="password" placeholder="At least 6 characters with letter & number" />
+  <label>Full Name</label>
+  <input id="name" placeholder="Enter your full name" />
 
-      <button id="submitBtn" onclick="register()">Create Account</button>
-    </div>
+  <label>Password</label>
+  <div class="password-wrap">
+    <input id="password" type="password" placeholder="Min 6 chars (letters + numbers)" />
+
+    <!-- 👁 Eye Icon -->
+    <svg onclick="togglePassword()" class="eye-icon" id="eyeIcon" viewBox="0 0 24 24">
+      <path d="M12 5c-7 0-10 7-10 7s3 7 10 7 10-7 10-7-3-7-10-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/>
+    </svg>
   </div>
 
-  <div id="popupBackdrop" class="popup-backdrop">
-    <div class="popup">
-      <p id="popupText"></p>
-      <button onclick="closePopup()">OK</button>
-    </div>
+  <button id="submitBtn" onclick="register()">Create Account</button>
+</div>
+
+<div id="popupBackdrop" class="popup-backdrop">
+  <div class="popup">
+    <p id="popupText"></p>
+    <button onclick="closePopup()">OK</button>
   </div>
+</div>
 
-  <script>
-    const submitBtn = document.getElementById("submitBtn");
-    const email = document.getElementById("email");
-    const role = document.getElementById("role");
-    const department = document.getElementById("department");
+<script>
+const submitBtn = document.getElementById("submitBtn");
+const email = document.getElementById("email");
+const role = document.getElementById("role");
+const department = document.getElementById("department");
+const passwordInput = document.getElementById("password");
+const eyeIcon = document.getElementById("eyeIcon");
 
-    function showPopup(msg) {
-      document.getElementById("popupText").textContent = msg;
-      document.getElementById("popupBackdrop").style.display = "flex";
+let departmentId = null;
+
+// ================= PASSWORD TOGGLE =================
+function togglePassword() {
+  if (passwordInput.type === "password") {
+    passwordInput.type = "text";
+
+    // eye OFF state (optional change icon feel)
+    eyeIcon.style.fill = "#16a34a";
+  } else {
+    passwordInput.type = "password";
+
+    // reset color
+    eyeIcon.style.fill = "#64748b";
+  }
+}
+
+// ================= POPUP =================
+function showPopup(msg) {
+  document.getElementById("popupText").textContent = msg;
+  document.getElementById("popupBackdrop").style.display = "flex";
+}
+
+function closePopup() {
+  document.getElementById("popupBackdrop").style.display = "none";
+  submitBtn.disabled = false;
+  submitBtn.textContent = "Create Account";
+}
+
+// ================= COOKIE =================
+function getCookie(name) {
+  const cookies = document.cookie.split("; ");
+  for (let c of cookies) {
+    const parts = c.split("=");
+    if (parts[0] === name) return decodeURIComponent(parts.slice(1).join("="));
+  }
+  return null;
+}
+
+function deleteInviteCookie() {
+  document.cookie = "inviteToken=; Max-Age=0; path=/; SameSite=Lax";
+}
+
+// ================= LOAD INVITE =================
+async function loadInvite() {
+  const token = getCookie("inviteToken");
+
+  if (!token) {
+    showPopup("Invalid or expired invite link.");
+    submitBtn.disabled = true;
+    return;
+  }
+
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+
+    email.value = payload.email || "";
+    role.value = payload.role || "";
+
+    departmentId = payload.departmentId || null;
+
+    if (payload.department) {
+      department.value = payload.department;
+    } else if (departmentId) {
+      const res = await fetch(`/api/v1/departments/${departmentId}`);
+      if (res.ok) {
+        const data = await res.json();
+        department.value = data.data?.name || "";
+      }
     }
 
-    function closePopup() {
-      document.getElementById("popupBackdrop").style.display = "none";
+  } catch (err) {
+    showPopup("Invalid invite token.");
+    submitBtn.disabled = true;
+  }
+}
+
+loadInvite();
+
+// ================= REGISTER =================
+async function register() {
+  const nameInput = document.getElementById("name");
+
+  nameInput.classList.remove("error");
+  passwordInput.classList.remove("error");
+
+  if (!nameInput.value.trim()) {
+    nameInput.classList.add("error");
+    showPopup("Full name is required.");
+    return;
+  }
+
+  if (!/^(?=.*[A-Za-z])(?=.*\d).{6,}$/.test(passwordInput.value)) {
+    passwordInput.classList.add("error");
+    showPopup("Password must include letters and numbers.");
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Creating...";
+
+  try {
+    const res = await fetch("/api/v1/auth/registerbyinvite", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: nameInput.value.trim(),
+        password: passwordInput.value,
+        email: email.value,
+        role: role.value,
+        departmentId: departmentId
+      })
+    });
+
+    if (res.ok) {
+      deleteInviteCookie();
+      window.location.href = "queueless://app/login";
+    } else {
+      const data = await res.json();
+      showPopup(data.message || "Registration failed.");
       submitBtn.disabled = false;
       submitBtn.textContent = "Create Account";
     }
 
-    function getCookieByName(name) {
-      const cookies = document.cookie.split("; ");
-      for (let c of cookies) {
-        const parts = c.split("=");
-        if (parts[0] === name) return decodeURIComponent(parts.slice(1).join("="));
-      }
-      return null;
-    }
+  } catch (err) {
+    showPopup("Server not reachable.");
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Create Account";
+  }
+}
+</script>
 
-    function deleteInviteCookie() {
-      document.cookie = "inviteToken=; Max-Age=0; path=/; SameSite=Lax";
-    }
-
-    async function loadInvite() {
-      const inviteToken = getCookieByName("inviteToken");
-      if (!inviteToken) {
-        showPopup("This invite link is invalid or has already been used.");
-        submitBtn.disabled = true;
-        return;
-      }
-
-      try {
-        // Decode payload from token
-        const payload = JSON.parse(atob(inviteToken.split(".")[1]));
-        email.value = payload.email || "";
-        role.value = payload.role || "";
-
-        // Fetch department name from server using departmentId
-        if (payload.department) {
-          const res = await fetch(`${window.location.origin}/api/v1/departments/${payload.department}`);
-          if (res.ok) {
-            const data = await res.json();
-            department.value = data.name || "";
-          } else {
-            department.value = "";
-          }
-        }
-      } catch {
-        showPopup("Invalid invite token.");
-        submitBtn.disabled = true;
-      }
-    }
-
-    loadInvite();
-
-    async function register() {
-      const nameInput = document.getElementById("name");
-      const passwordInput = document.getElementById("password");
-
-      nameInput.classList.remove("error");
-      passwordInput.classList.remove("error");
-
-      if (!nameInput.value.trim()) {
-        nameInput.classList.add("error");
-        showPopup("Full name is required.");
-        return;
-      }
-
-      if (!/^(?=.*[A-Za-z])(?=.*\d).{6,}$/.test(passwordInput.value)) {
-        passwordInput.classList.add("error");
-        showPopup("Password must include letters and numbers.");
-        return;
-      }
-
-      submitBtn.disabled = true;
-      submitBtn.textContent = "Creating account...";
-
-      try {
-        const res = await fetch("/api/v1/auth/registerbyinvite", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: nameInput.value.trim(),
-            password: passwordInput.value
-          })
-        });
-
-        if (res.ok) {
-          deleteInviteCookie(); // one-time use 🔥
-          window.location.href = "queueless://app/login";
-        } else {
-          const data = await res.json();
-          showPopup(data.message || "Registration failed.");
-          submitBtn.disabled = false;
-          submitBtn.textContent = "Create Account";
-        }
-      } catch {
-        showPopup("Server not reachable.");
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Create Account";
-      }
-    }
-  </script>
 </body>
 </html>

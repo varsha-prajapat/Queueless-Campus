@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../services/otp_service.dart';
+import '../../services/socket_service.dart';
 import '../../../routes/app_routes.dart';
 import '../../core/constants/app_constants.dart';
 import '../../provider/profile_provider.dart';
+import "../../utils/auth_role_helper.dart";
+import "../../services/staff_service/counter_service.dart";
 
 const String PURPOSE_REGISTER = "EMAIL_VERIFICATION";
 const String PURPOSE_LOGIN = "LOGIN_2FA";
@@ -69,12 +72,39 @@ class _OTPScreenState extends State<OTPScreen> {
 
       if (!mounted) return;
 
-      // ✅ If login OTP, fetch profile before navigating to Home
+      final profileProvider =
+          Provider.of<ProfileProvider>(context, listen: false);
+
       if (widget.purpose == PURPOSE_LOGIN) {
-        final profileProvider =
-            Provider.of<ProfileProvider>(context, listen: false);
-        await profileProvider.fetchProfile(); // fetch user profile
+        await profileProvider.fetchProfile();
+
+        final socketService = SocketService();
+        final userId = await AuthRoleHelper.getUserId();
+        final String role = (await AuthRoleHelper.getRole()).toUpperCase();
+
+        List<String> counterIds = [];
+
+        if (role.toLowerCase() == "staff") {
+          try {
+            final counters =
+                await CounterService.getUserCounters(staffId: userId);
+
+            counterIds = counters.map((c) => c.id).toList();
+          } catch (_) {
+            counterIds = [];
+          }
+        }
+
+        socketService.init(
+          userId: userId,
+          roles: [role],
+          counters: counterIds,
+        );
+
+        socketService.connect();
       }
+
+      if (!mounted) return;
 
       Navigator.of(context).pushNamedAndRemoveUntil(
         widget.purpose == PURPOSE_REGISTER ? AppRoutes.login : AppRoutes.app,
@@ -160,9 +190,32 @@ class _OTPScreenState extends State<OTPScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: widget.purpose == PURPOSE_REGISTER
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.arrow_back),
+                color: Colors.black,
+                onPressed: () {
+                  if (widget.purpose == PURPOSE_LOGIN) {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context);
+                    }
+                  } else {
+                    Navigator.of(context).pushNamedAndRemoveUntil(
+                      AppRoutes.login,
+                      (_) => false,
+                    );
+                  }
+                },
+              ),
+      ),
       body: Stack(
         children: [
-          // Background
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -175,7 +228,6 @@ class _OTPScreenState extends State<OTPScreen> {
               ),
             ),
           ),
-
           SafeArea(
             child: Center(
               child: Padding(

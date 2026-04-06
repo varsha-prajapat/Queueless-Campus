@@ -3,7 +3,7 @@ import Counter from "../models/counterModel.js";
 import mongoose from "mongoose";
 
 /**
- * 🔌 Queue Socket Setup (FIXED)
+ * 🔌 Queue Socket Setup (FIXED + SAFE)
  */
 export const queueSocket = (io) => {
   io.on("connection", async (socket) => {
@@ -12,11 +12,17 @@ export const queueSocket = (io) => {
 
       const userId = socket.handshake.query?.userId?.toString();
 
+      // 🔥 FIX 1: safe role parsing + normalization
       let roles = socket.handshake.query?.roles
         ? socket.handshake.query.roles.split(",")
         : [];
 
-      roles = roles.map((r) => r.toUpperCase());
+      roles = roles
+        .map((r) => r?.toString().trim().toUpperCase())
+        .filter(Boolean);
+
+      console.log("🔐 Roles received:", roles);
+      console.log("🆔 User ID:", userId);
 
       /* ================= 👤 PERSONAL ROOM ================= */
       if (userId) {
@@ -26,23 +32,25 @@ export const queueSocket = (io) => {
       /* ================= 🎭 ROLE ROOMS ================= */
       roles.forEach((role) => {
         socket.join(`role_${role}`);
+        console.log(`📡 Joined role room: role_${role}`);
       });
 
       /* ================= 🧑‍💼 STAFF COUNTER ROOMS ================= */
       if (roles.includes("STAFF") && userId) {
-        if (!mongoose.Types.ObjectId.isValid(userId)) return;
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+          console.warn("⚠️ Invalid userId for STAFF:", userId);
+        } else {
+          const counters = await Counter.find({
+            staffIds: new mongoose.Types.ObjectId(userId),
+            isActive: true,
+          }).select("_id");
 
-        // ✅ FIX: find ALL counters (not just one)
-        const counters = await Counter.find({
-          staffIds: new mongoose.Types.ObjectId(userId),
-          isActive: true,
-        }).select("_id");
+          for (const c of counters) {
+            const room = `role_COUNTER_${c._id.toString()}`;
+            socket.join(room);
 
-        for (const c of counters) {
-          const room = `role_COUNTER_${c._id.toString()}`;
-          socket.join(room);
-
-          console.log(`✅ Staff ${userId} joined counter room: ${room}`);
+            console.log(`✅ Staff joined counter room: ${room}`);
+          }
         }
       }
 
@@ -50,8 +58,10 @@ export const queueSocket = (io) => {
       if (userId) {
         let counterIds = [];
 
-        // 👉 get staff counters for filtering notifications
-        if (roles.includes("STAFF")) {
+        if (
+          roles.includes("STAFF") &&
+          mongoose.Types.ObjectId.isValid(userId)
+        ) {
           const counters = await Counter.find({
             staffIds: new mongoose.Types.ObjectId(userId),
             isActive: true,
@@ -72,7 +82,7 @@ export const queueSocket = (io) => {
                 { isGlobal: true },
               ],
             },
-            { hiddenFor: { $nin: [userId] } }, // ✅ FIX
+            { hiddenFor: { $nin: [userId] } },
           ],
         })
           .sort({ createdAt: -1 })
@@ -93,9 +103,9 @@ export const queueSocket = (io) => {
 };
 
 /**
- * 🚀 GLOBAL TOKEN EVENT EMITTER
+ * 🚀 GLOBAL TOKEN EVENT EMITTER (FIXED + SAFE)
  */
-export const emitTokenEvent = (io, token, eventName = "token:update") => {
+export const emitTokenEvent = (token, eventName = "token:update", io) => {
   if (!io || !token) return;
 
   const studentId =
@@ -115,6 +125,7 @@ export const emitTokenEvent = (io, token, eventName = "token:update") => {
   if (counterId) {
     io.to(`role_COUNTER_${counterId}`).emit(eventName, token);
   }
-  /* 🛡️ ADMIN (NEW ADD) */
+
+  /* 🛡️ ADMIN */
   io.to("role_ADMIN").emit(eventName, token);
 };

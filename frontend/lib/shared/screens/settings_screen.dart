@@ -7,6 +7,7 @@ import '../../utils/auth_role_helper.dart';
 import '../../auth/services/auth_storage.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../provider/profile_provider.dart';
+import '../../services/socket_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -31,6 +32,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _logout() async {
+    try {
+      /// 🔥 SOCKET DISCONNECT (IMPORTANT)
+      SocketService().dispose();
+    } catch (_) {}
+
     /// 🔑 Clear tokens
     await AuthStorage.clear();
 

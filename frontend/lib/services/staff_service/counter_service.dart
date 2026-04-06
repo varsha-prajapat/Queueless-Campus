@@ -50,10 +50,10 @@ class CounterService {
         dataList = decoded;
       }
 
-      List<CounterModel> counters =
+      List<CounterModel> counter =
           dataList.map((e) => CounterModel.fromJson(e)).toList();
 
-      return counters.where((counter) => counter.isActive == true).toList();
+      return counter;
     } catch (e) {
       throw Exception("Error loading counters: $e");
     }

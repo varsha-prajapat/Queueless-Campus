@@ -170,42 +170,6 @@ class TokenService {
     }
   }
 
-  /// ============================== Get Service Name ==============================
-  static Future<String> getServiceName(String serviceId) async {
-    if (serviceId.isEmpty) return "Unknown Service";
-
-    try {
-      final response = await _get(Api_Config.getservice_name);
-      if (response.statusCode != 200) return "Unknown Service";
-
-      final decoded = jsonDecode(response.body);
-      List<Map<String, dynamic>> services = [];
-
-      if (decoded is Map<String, dynamic> && decoded.containsKey("data")) {
-        final data = decoded["data"];
-        if (data is List) {
-          services = data.map((e) => Map<String, dynamic>.from(e)).toList();
-        } else if (data is Map && data["services"] is List) {
-          services = (data["services"] as List)
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-        }
-      } else if (decoded is List) {
-        services = decoded.map((e) => Map<String, dynamic>.from(e)).toList();
-      }
-
-      final service = services.firstWhere(
-        (s) => s["_id"] == serviceId,
-        orElse: () => {},
-      );
-      return service["_id"] != null
-          ? (service["name"] ?? "Unknown Service")
-          : "Unknown Service";
-    } catch (e) {
-      return "Unknown Service";
-    }
-  }
-
   /// ============================== Cancel Token ==============================
   static Future<bool> cancelToken({
     required String tokenId, // ✅ REQUIRED (IMPORTANT FIX)

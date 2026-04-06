@@ -1,9 +1,8 @@
 import mongoose from "mongoose";
 import Service from "../models/serviceModel.js";
 import Counter from "../models/counterModel.js";
-import Department from "../models/DepartmentModel.js";
 import User from "../models/userModel.js";
-
+import { updateCounter, deleteCounter } from "./counterService.js";
 /**
  * ➕ Create a service
  */
@@ -21,13 +20,6 @@ export const createService = async (data, io = null) => {
 
   const service = await Service.create(data);
 
-  // Get all staff in the department
-  const staffUsers = await User.find({
-    departmentId: service.departmentId,
-    role: "STAFF",
-  }).select("_id");
-  const staffIds = staffUsers.map((u) => u._id);
-
   return service;
 };
 
@@ -35,40 +27,79 @@ export const createService = async (data, io = null) => {
  * ✏️ Update a service
  */
 export const updateService = async (id, data, io = null) => {
-  if (!mongoose.Types.ObjectId.isValid(id))
+  /* ================= 🛑 VALIDATION ================= */
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new Error("Invalid Service ID");
+  }
 
   if (data.name) data.name = data.name.toUpperCase();
 
-  // Duplicate check
+  /* ================= 🏷️ SERVICE TYPE LOGIC ================= */
+
+  // ✅ Ensure valid enum
+  const validTypes = ["Documents", "Fees"];
+
+  if (data.serviceType && !validTypes.includes(data.serviceType)) {
+    throw new Error("Invalid service type");
+  }
+
+  // ✅ If serviceType is provided → control hasFee
+  if (data.serviceType) {
+    if (data.serviceType === "Fees") {
+      data.hasFee = true;
+    } else if (data.serviceType === "Documents") {
+      data.hasFee = false;
+    }
+  }
+
+  /* ================= 💰 HAS FEE LOGIC ================= */
+
+  if (data.hasFee === false) {
+    data.fee = 0;
+  }
+
+  /* ================= 🔍 DUPLICATE CHECK ================= */
+
   if (data.name && data.departmentId) {
     const exists = await Service.findOne({
       _id: { $ne: id },
       name: data.name,
       departmentId: data.departmentId,
     });
-    if (exists)
+
+    if (exists) {
       throw new Error(
         "A service with this name already exists in this department",
       );
+    }
   }
+
+  /* ================= 📦 GET OLD SERVICE ================= */
+
+  const existingService = await Service.findById(id);
+  if (!existingService) throw new Error("Service not found");
+
+  const oldPausedStatus = existingService.isPaused;
+
+  /* ================= 📦 UPDATE SERVICE ================= */
 
   const service = await Service.findByIdAndUpdate(id, data, {
     new: true,
     runValidators: true,
   });
-  if (!service) throw new Error("Service not found");
 
-  if (data.isPaused !== undefined) {
-    await Counter.updateMany({ serviceId: id }, { isActive: !data.isPaused });
+  /* ================= 🔄 STATUS CHANGED ================= */
+
+  if (data.isPaused !== undefined && oldPausedStatus !== data.isPaused) {
+    const isActive = !data.isPaused;
+
+    const counters = await Counter.find({ serviceId: id }).select("_id");
+
+    await Promise.all(
+      counters.map((counter) => updateCounter(counter._id, { isActive }, io)),
+    );
   }
-
-  // Get department staff
-  const staffUsers = await User.find({
-    departmentId: service.departmentId,
-    role: "STAFF",
-  }).select("_id");
-  const staffIds = staffUsers.map((u) => u._id);
 
   return service;
 };
@@ -77,24 +108,26 @@ export const updateService = async (id, data, io = null) => {
  * ❌ Delete a service
  */
 export const deleteService = async (id, io = null) => {
-  if (!mongoose.Types.ObjectId.isValid(id))
-    throw new Error("Invalid Service ID");
+  console.log("id:", id);
 
-  const service = await Service.findByIdAndDelete(id);
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new Error("Invalid Service ID");
+  }
+
+  const service = await Service.findById(id);
   if (!service) throw new Error("Service not found");
 
-  await Counter.deleteMany({ serviceId: id });
+  const counters = await Counter.find({ serviceId: id }).select("_id");
 
-  // Get department staff
-  const staffUsers = await User.find({
-    departmentId: service.departmentId,
-    role: "STAFF",
-  }).select("_id");
-  const staffIds = staffUsers.map((u) => u._id);
+  await Promise.all(counters.map((counter) => deleteCounter(counter._id, io)));
 
-  return true;
+  await Service.findByIdAndDelete(id);
+
+  return {
+    success: true,
+    message: "Service deleted and all counters processed via deleteCounter()",
+  };
 };
-
 /**
  * 📄 Get all services
  */

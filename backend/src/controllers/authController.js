@@ -1,6 +1,5 @@
 import { authService } from "../services/authService.js";
 import { STATUS } from "../config/status.js";
-import User from "../models/UserModel.js";
 import { verifyInviteToken } from "../utils/jwt.js";
 
 export const authController = {

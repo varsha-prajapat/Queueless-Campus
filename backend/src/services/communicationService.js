@@ -1,16 +1,19 @@
+import mongoose from "mongoose";
 import Notification from "../models/NotificationModel.js";
+import Counter from "../models/counterModel.js";
 import { createNotification } from "./notificationService.js";
-import { getTokenStatsService } from "./tokenService.js";
+import { getTokenStatsService, getStaffQueue } from "./tokenService.js";
 
 const safeEmit = (io, room, event, data) => {
   try {
-    if (!io || typeof io.to !== "function") return;
+    if (!io?.to) return;
     io.to(room).emit(event, data);
   } catch (err) {
     console.error("Emit Error:", err.message);
   }
 };
-const queueSocket = (io) => {
+
+export const queueSocket = (io) => {
   io.on("connection", async (socket) => {
     try {
       const userId = socket.handshake.query?.userId?.toString();
@@ -47,7 +50,7 @@ const queueSocket = (io) => {
             {
               $or: [{ userId }, { roles: { $in: roles } }, { isGlobal: true }],
             },
-            { hiddenFor: { $ne: userId } },
+            { hiddenFor: { $nin: [userId] } },
           ],
         })
           .sort({ createdAt: -1 })
@@ -96,17 +99,14 @@ export const sendNotification = async ({
 
     const payload = notification;
 
-    // 👇 1. USER ROOM
     if (userId) {
       safeEmit(io, userId.toString(), "notifications:new", payload);
     }
 
-    // 👇 2. ROLE ROOMS
     roles.forEach((r) => {
       safeEmit(io, `role_${r}`, "notifications:new", payload);
     });
 
-    // 👇 3. COUNTER ROOM (FIXED)
     if (counterId) {
       safeEmit(io, `role_COUNTER_${counterId}`, "notifications:new", payload);
     }
@@ -117,19 +117,19 @@ export const sendNotification = async ({
   }
 };
 
-/* ================= STUDENT STATS EMIT ================= */
+/* ================= STUDENT STATS ================= */
 export const emitStudentStats = async (studentId, io) => {
   if (!studentId) return;
 
   try {
     const stats = await getTokenStatsService(studentId);
-    safeEmit(io, studentId.toString(), "token:update", stats);
+    safeEmit(io, studentId.toString(), "stats:update", stats); // ✅ FIXED
   } catch (err) {
     console.error("Stats Error:", err.message);
   }
 };
 
-/* ================= TOKEN EVENT EMITTER ================= */
+/* ================= TOKEN EVENT ================= */
 export const emitTokenEvent = (token, event, io) => {
   if (!token) return;
 
@@ -140,4 +140,7 @@ export const emitTokenEvent = (token, event, io) => {
 
   if (studentRoom) safeEmit(io, studentRoom, event, token);
   if (counterRoom) safeEmit(io, `role_COUNTER_${counterRoom}`, event, token);
+
+  // optional
+  safeEmit(io, "role_ADMIN", event, token);
 };

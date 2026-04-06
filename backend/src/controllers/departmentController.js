@@ -51,6 +51,15 @@ export const getDepartmentById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // ✅ Check if ID is missing
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Department ID is required",
+      });
+    }
+
+    // ✅ Check if ID is valid Mongo ObjectId
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,

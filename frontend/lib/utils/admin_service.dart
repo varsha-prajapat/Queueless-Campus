@@ -8,13 +8,17 @@ class AdminService {
   static Future<void> inviteUser({
     required String email,
     required String role,
-    required String department,
+    required String departmentId, // ✅ FIX: use ID instead of name
   }) async {
+    /* ================= 🔐 ROLE CHECK ================= */
+
     final isAdmin = await AuthRoleHelper.isAdmin();
 
     if (!isAdmin) {
       throw Exception("Only admin can invite users");
     }
+
+    /* ================= 🚀 API CALL ================= */
 
     await AccessManager.execute((headers) {
       return http.post(
@@ -26,7 +30,7 @@ class AdminService {
         body: jsonEncode({
           "email": email.trim().toLowerCase(),
           "role": role,
-          "department": department,
+          "departmentId": departmentId, // ✅ IMPORTANT CHANGE
         }),
       );
     });

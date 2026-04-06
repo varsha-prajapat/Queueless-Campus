@@ -2,12 +2,57 @@ import Notification from "../models/NotificationModel.js";
 import Counter from "../models/counterModel.js";
 import mongoose from "mongoose";
 
+/* =========================================================
+   🔧 HELPERS
+========================================================= */
+
+const toObjectId = (id) => new mongoose.Types.ObjectId(id);
+
 /**
- * 🔔 Create Notification + Emit
+ * 🔥 FIX: counterId null-safe condition
  */
+const counterIdNotExistsCondition = {
+  $or: [{ counterId: null }, { counterId: { $exists: false } }],
+};
+
+/**
+ * 📦 Build common OR conditions (REUSABLE)
+ */
+const buildOrConditions = ({ userId, roles, counterIds }) => {
+  const orConditions = [];
+
+  // 👤 Personal
+  orConditions.push({ userId });
+
+  // 🌍 Global
+  orConditions.push({ isGlobal: true });
+
+  // 🎭 Role-based (ONLY generic, no counter notifications)
+  if (roles.length) {
+    orConditions.push({
+      roles: { $in: roles },
+      ...counterIdNotExistsCondition,
+    });
+  }
+
+  // 🧑‍💼 Counter-based
+  if (counterIds.length > 0) {
+    orConditions.push({
+      counterId: { $in: counterIds },
+    });
+  }
+
+  return orConditions;
+};
+
+/* =========================================================
+   🔔 CREATE NOTIFICATION
+========================================================= */
+
 export const createNotification = async (io, data) => {
   try {
-    // ---------------- VALIDATION ----------------
+    /* ================= VALIDATION ================= */
+
     if (!data.title || !data.message) {
       throw new Error("Title & message required");
     }
@@ -16,13 +61,13 @@ export const createNotification = async (io, data) => {
       !data.userId &&
       !data.isGlobal &&
       (!data.roles || data.roles.length === 0) &&
-      !data.departmentId &&
       !data.counterId
     ) {
       throw new Error("Target required");
     }
 
-    // ---------------- SAVE ----------------
+    /* ================= SAVE ================= */
+
     const notification = await Notification.create(data);
     const notif = notification.toObject();
 
@@ -33,37 +78,34 @@ export const createNotification = async (io, data) => {
       data: notif,
     };
 
-    // ---------------- GLOBAL ----------------
+    const getCounterRoom = (id) => `role_COUNTER_${id.toString()}`;
+
+    /* ================= GLOBAL ================= */
+
     if (notif.isGlobal) {
       io.emit("notification:new", payload);
       return notif;
     }
 
-    // ---------------- PERSONAL ----------------
+    /* ================= USER ================= */
+
     if (notif.userId) {
       io.to(notif.userId.toString()).emit("notification:new", payload);
     }
 
-    // ---------------- ROLE ----------------
+    /* ================= COUNTER (HIGHEST PRIORITY) ================= */
+
+    if (notif.counterId) {
+      io.to(getCounterRoom(notif.counterId)).emit("notification:new", payload);
+      return notif;
+    }
+
+    /* ================= ROLE ================= */
+
     if (notif.roles?.length) {
       notif.roles.forEach((role) => {
-        const safeRole = role.toUpperCase(); // 🔥 FIX
-        io.to(`role_${safeRole}`).emit("notification:new", payload);
+        io.to(`role_${role.toUpperCase()}`).emit("notification:new", payload);
       });
-    }
-
-    // ---------------- DEPARTMENT ----------------
-    if (notif.departmentId) {
-      io.to(`dept_${notif.departmentId}`).emit("notification:new", payload);
-    }
-
-    // ---------------- COUNTER ----------------
-    if (notif.counterId) {
-      // 🔥 IMPORTANT FIX (MATCH SOCKET JOIN)
-      io.to(`role_COUNTER_${notif.counterId}`).emit(
-        "notification:new",
-        payload,
-      );
     }
 
     return notif;
@@ -73,41 +115,42 @@ export const createNotification = async (io, data) => {
   }
 };
 
-/**
- * 📥 Get Notifications + Unread Count
- */
+/* =========================================================
+   📥 GET USER NOTIFICATIONS
+========================================================= */
+
 export const getUserNotifications = async (user) => {
   try {
-    const userId = user._id;
-    const role = user.role?.toUpperCase();
-    const deptId = user.departmentId;
+    const userId = toObjectId(user._id);
+    const userIdStr = userId.toString();
 
-    const now = new Date();
+    const roles = Array.isArray(user.roles)
+      ? user.roles.map((r) => r.toUpperCase())
+      : user.role
+        ? [user.role.toUpperCase()]
+        : [];
 
     let counterIds = [];
 
-    if (role === "STAFF") {
+    // 🧑‍💼 STAFF COUNTERS
+    if (roles.includes("STAFF")) {
       const counters = await Counter.find({
         staffIds: userId,
-        isActive: true,
-      }).select("_id");
+      })
+        .select("_id")
+        .lean();
 
       counterIds = counters.map((c) => c._id);
     }
 
+    const orConditions = buildOrConditions({
+      userId,
+      roles,
+      counterIds,
+    });
+
     const query = {
-      $and: [
-        {
-          $or: [
-            { userId },
-            { roles: { $in: [role] } },
-            { departmentId: deptId },
-            ...(counterIds.length ? [{ counterId: { $in: counterIds } }] : []),
-            { isGlobal: true },
-          ],
-        },
-        { hiddenFor: { $nin: [userId] } },
-      ],
+      $and: [{ $or: orConditions }, { hiddenFor: { $nin: [userId] } }],
     };
 
     const notifications = await Notification.find(query)
@@ -116,33 +159,23 @@ export const getUserNotifications = async (user) => {
 
     let unreadCount = 0;
 
-    const formattedNotifications = notifications
-      .map((n) => {
-        const expiresAt =
-          n.expiresFor?.[userId.toString()] || n.expiresAt || null;
+    const formatted = notifications.map((n) => {
+      const isRead = n.readBy?.some((id) => id.toString() === userIdStr);
 
-        const isRead = n.readBy?.some(
-          (id) => id.toString() === userId.toString(),
-        );
+      if (!isRead) unreadCount++;
 
-        if (!isRead && (!expiresAt || expiresAt > now)) {
-          unreadCount++;
-        }
-
-        return {
-          _id: n._id,
-          title: n.title,
-          message: n.message,
-          type: n.type,
-          isRead,
-          expiresAt,
-          createdAt: n.createdAt,
-        };
-      })
-      .filter((n) => !n.expiresAt || n.expiresAt > now);
+      return {
+        _id: n._id,
+        title: n.title,
+        message: n.message,
+        type: n.type,
+        isRead,
+        createdAt: n.createdAt,
+      };
+    });
 
     return {
-      notifications: formattedNotifications,
+      notifications: formatted,
       unreadCount,
     };
   } catch (err) {
@@ -151,14 +184,17 @@ export const getUserNotifications = async (user) => {
   }
 };
 
-/**
- * 👁️ Mark All Read
- */
+/* =========================================================
+   👁️ MARK ALL AS READ
+========================================================= */
+
 export const markAllAsRead = async (io, userId) => {
   try {
+    const uid = toObjectId(userId);
+
     await Notification.updateMany(
-      { readBy: { $ne: userId } },
-      { $addToSet: { readBy: userId } },
+      { readBy: { $ne: uid } },
+      { $addToSet: { readBy: uid } },
     );
 
     if (io) {
@@ -174,9 +210,10 @@ export const markAllAsRead = async (io, userId) => {
   }
 };
 
-/**
- * ❌ Delete One
- */
+/* =========================================================
+   ❌ DELETE ONE
+========================================================= */
+
 export const deleteNotification = async (io, userId, notificationId) => {
   try {
     const notification = await Notification.findById(notificationId);
@@ -201,14 +238,17 @@ export const deleteNotification = async (io, userId, notificationId) => {
   }
 };
 
-/**
- * ❌ Delete All
- */
+/* =========================================================
+   ❌ DELETE ALL
+========================================================= */
+
 export const deleteAllNotifications = async (io, userId) => {
   try {
+    const uid = toObjectId(userId);
+
     await Notification.updateMany(
-      { hiddenFor: { $nin: [userId] } },
-      { $addToSet: { hiddenFor: userId } },
+      { hiddenFor: { $nin: [uid] } },
+      { $addToSet: { hiddenFor: uid } },
     );
 
     if (io) {
@@ -224,47 +264,46 @@ export const deleteAllNotifications = async (io, userId) => {
   }
 };
 
-/**
- * 📊 Unread Count
- */
+/* =========================================================
+   📊 UNREAD COUNT
+========================================================= */
+
 export const getUnreadCount = async (userId, role) => {
   try {
-    if (!userId) {
-      throw new Error("User ID is required");
-    }
+    if (!userId) throw new Error("User ID required");
 
-    const userObjectId = new mongoose.Types.ObjectId(userId);
+    const uid = toObjectId(userId);
+    const roleUpper = role?.toUpperCase();
+
     let counterIds = [];
 
-    if (role?.toUpperCase() === "STAFF") {
+    if (roleUpper === "STAFF") {
       const counters = await Counter.find({
-        staffIds: userObjectId,
-        isActive: true,
-      }).select("_id");
+        staffIds: uid,
+      })
+        .select("_id")
+        .lean();
 
       counterIds = counters.map((c) => c._id);
     }
 
+    const orConditions = buildOrConditions({
+      userId: uid,
+      roles: roleUpper ? [roleUpper] : [],
+      counterIds,
+    });
+
     const query = {
       $and: [
-        {
-          $or: [
-            { userId: userObjectId },
-            { roles: { $in: [role] } }, // 🔥 ADD THIS LINE
-            { isGlobal: true },
-            ...(counterIds.length ? [{ counterId: { $in: counterIds } }] : []),
-          ],
-        },
-        { hiddenFor: { $ne: userObjectId } },
-        { readBy: { $ne: userObjectId } },
+        { $or: orConditions },
+        { hiddenFor: { $nin: [uid] } },
+        { readBy: { $nin: [uid] } },
       ],
     };
 
-    const count = await Notification.countDocuments(query);
-
-    return count;
-  } catch (error) {
-    console.error("❌ getUnreadCount Error:", error.message);
-    throw error;
+    return await Notification.countDocuments(query);
+  } catch (err) {
+    console.error("❌ getUnreadCount Error:", err.message);
+    throw err;
   }
 };

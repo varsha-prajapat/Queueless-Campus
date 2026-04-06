@@ -19,7 +19,6 @@ class SocketService {
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get tokenStream => _tokenController.stream;
 
-  // 🔥 ADMIN STREAM (NEW)
   final StreamController<Map<String, dynamic>> _adminController =
       StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get adminStream => _adminController.stream;
@@ -48,6 +47,11 @@ class SocketService {
     required List<String> roles,
     List<String>? counters,
   }) {
+    // 🔥 USER CHANGE DETECT → CLEAN OLD SOCKET
+    if (this.userId != null && this.userId != userId) {
+      _forceDisposeSocket();
+    }
+
     this.userId = userId;
     this.roles = roles;
     this.counters = counters;
@@ -55,19 +59,19 @@ class SocketService {
 
   // ----------------- CONNECT -----------------
   Future<void> connect() async {
-    if (_initialized && socket?.connected == true) return;
-    _initialized = true;
+    if (userId == null || roles == null) return;
 
-    if (userId == null || roles == null) {
-      return;
-    }
+    // 🔥 ALWAYS CLEAN OLD SOCKET FIRST
+    _forceDisposeSocket();
+
+    _initialized = true;
 
     socket = IO.io(
       _serverUrl,
       IO.OptionBuilder()
           .setTransports(['websocket'])
-          .enableAutoConnect()
-          .setReconnectionAttempts(10)
+          .disableAutoConnect() // 🔥 manual control
+          .setReconnectionAttempts(5)
           .setReconnectionDelay(2000)
           .setQuery({
             'userId': userId!,
@@ -76,30 +80,45 @@ class SocketService {
           .build(),
     );
 
-    // ----------------- CONNECT EVENT -----------------
-    socket!.onConnect((_) {
-      socket?.emit('joinRoom', userId);
+    socket!.connect();
 
+    // ----------------- CONNECT -----------------
+    socket!.onConnect((_) {
+      print("✅ Socket Connected: $userId");
+
+      // join personal room
+      socket?.emit('joinRoom', 'user_$userId');
+
+      // join role rooms
+      for (var role in roles!) {
+        socket?.emit('joinRoom', 'role_$role');
+      }
+
+      // staff counters
       if (roles!.contains('staff') && counters != null) {
         for (var counterId in counters!) {
-          socket?.emit('joinRoom', 'role_COUNTER_$counterId');
+          socket?.emit('joinRoom', 'counter_$counterId');
         }
       }
 
-      // ❗ FIX: register ALL listeners here (important)
+      // register listeners
       _registerNotificationListeners();
       _registerTokenListeners();
-      _registerAdminListeners(); // 🔥 NEW
+      _registerAdminListeners();
     });
 
-    socket!.onDisconnect((reason) {});
+    socket!.onDisconnect((reason) {
+      print("❌ Socket Disconnected: $reason");
+    });
 
-    socket!.onError((err) {});
+    socket!.onError((err) {
+      print("⚠️ Socket Error: $err");
+    });
 
     socket!.on('ping', (_) => socket?.emit('pong'));
   }
 
-  // ----------------- NOTIFICATION EVENTS -----------------
+  // ----------------- NOTIFICATION -----------------
   void _registerNotificationListeners() {
     final events = [
       'notification:new',
@@ -121,12 +140,12 @@ class SocketService {
           if (!_notifController.isClosed) {
             _notifController.add(notif);
           }
-        } catch (e) {}
+        } catch (_) {}
       });
     }
   }
 
-  // ----------------- TOKEN EVENTS -----------------
+  // ----------------- TOKEN -----------------
   void _registerTokenListeners() {
     final tokenEvents = [
       'token:update',
@@ -150,12 +169,12 @@ class SocketService {
           if (!_tokenController.isClosed) {
             _tokenController.add(normalized);
           }
-        } catch (e) {}
+        } catch (_) {}
       });
     }
   }
 
-  // ----------------- ADMIN EVENTS (NEW) -----------------
+  // ----------------- ADMIN -----------------
   void _registerAdminListeners() {
     const event = 'admin:queue:update';
 
@@ -170,37 +189,42 @@ class SocketService {
         if (!_adminController.isClosed) {
           _adminController.add(adminData);
         }
-      } catch (e) {}
+      } catch (_) {}
     });
   }
 
   // ----------------- HELPERS -----------------
+  void emit(String event, dynamic data) {
+    socket?.emit(event, data);
+  }
+
   void on(String event, Function(dynamic) callback) {
     socket?.off(event);
     socket?.on(event, callback);
-  }
-
-  void emit(String event, dynamic data) {
-    socket?.emit(event, data);
   }
 
   void off(String event) {
     socket?.off(event);
   }
 
-  // ----------------- DISPOSE -----------------
+  // ----------------- FORCE SOCKET CLEAN -----------------
+  void _forceDisposeSocket() {
+    if (socket != null) {
+      socket!.clearListeners();
+      socket!.disconnect();
+      socket!.dispose();
+      socket = null;
+    }
+  }
+
+  // ----------------- LOGOUT -----------------
   void dispose() {
     _notifDebounce?.cancel();
 
-    socket?.clearListeners();
-    socket?.disconnect();
-    socket?.dispose();
-    socket = null;
+    _forceDisposeSocket();
 
     _initialized = false;
 
-    if (!_notifController.isClosed) _notifController.close();
-    if (!_tokenController.isClosed) _tokenController.close();
-    if (!_adminController.isClosed) _adminController.close(); // 🔥 NEW
+    // ❗ STREAMS CLOSE NAHI KARNE (IMPORTANT)
   }
 }

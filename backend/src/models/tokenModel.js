@@ -18,6 +18,11 @@ const tokenSchema = new mongoose.Schema(
       ref: "Service",
       required: true,
     },
+    serviceName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
     counterId: {
       type: mongoose.Schema.Types.ObjectId,

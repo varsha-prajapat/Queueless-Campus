@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../utils/admin_service.dart';
 import '../../shared/widgets/bottom_message.dart';
-import '../../../services/commonservice.dart'; // ✅ For DepartmentService
+import '../../../services/commonservice.dart';
 
 class AccessManagerScreen extends StatefulWidget {
   const AccessManagerScreen({super.key});
@@ -18,10 +18,13 @@ class _AccessManagerScreenState extends State<AccessManagerScreen> {
 
   final roles = ["ADMIN", "STAFF", "STUDENT"];
 
-  List<String> departments = []; // ✅ Dynamic departments
+  List<String> departments = [];
+
+  // ✅ name → id mapping
+  Map<String, String> departmentMap = {};
 
   bool isLoading = false;
-  bool isLoadingDepartments = true; // ✅ Loading flag for departments
+  bool isLoadingDepartments = true;
 
   // 🎨 Colors
   static const Color primary = Color(0xFF1F5F5B);
@@ -32,15 +35,23 @@ class _AccessManagerScreenState extends State<AccessManagerScreen> {
   @override
   void initState() {
     super.initState();
-    loadDepartments(); // ✅ Fetch departments on init
+    loadDepartments();
   }
 
-  /// ✅ Load departments dynamically from API
+  /// ✅ Load departments from API
   Future<void> loadDepartments() async {
     try {
       final deptData = await DepartmentService().getDepartments();
+
       setState(() {
         departments = deptData.map<String>((dept) => dept.name ?? "").toList();
+
+        // ✅ create map (name → id)
+        departmentMap = {
+          for (var dept in deptData)
+            if (dept.name != null && dept.id != null) dept.name!: dept.id!,
+        };
+
         isLoadingDepartments = false;
       });
     } catch (e) {
@@ -49,6 +60,7 @@ class _AccessManagerScreenState extends State<AccessManagerScreen> {
     }
   }
 
+  /// ✅ Invite API call
   Future<void> invite() async {
     final email = emailController.text.trim();
 
@@ -58,6 +70,7 @@ class _AccessManagerScreenState extends State<AccessManagerScreen> {
     }
 
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+
     if (!emailRegex.hasMatch(email)) {
       showBottomMessage(context, "Enter a valid email address", isError: true);
       return;
@@ -65,13 +78,21 @@ class _AccessManagerScreenState extends State<AccessManagerScreen> {
 
     if (isLoading) return;
 
+    // ✅ get departmentId from map
+    final departmentId = departmentMap[selectedDepartment];
+
+    if (departmentId == null) {
+      showBottomMessage(context, "Invalid department selected", isError: true);
+      return;
+    }
+
     setState(() => isLoading = true);
 
     try {
       await AdminService.inviteUser(
         email: email,
         role: selectedRole!,
-        department: selectedDepartment!,
+        departmentId: departmentId, // ✅ IMPORTANT
       );
 
       if (!mounted) return;
@@ -91,6 +112,7 @@ class _AccessManagerScreenState extends State<AccessManagerScreen> {
     }
   }
 
+  /// 🎨 Input Decoration
   InputDecoration input(String label, {IconData? icon}) {
     return InputDecoration(
       labelText: label,

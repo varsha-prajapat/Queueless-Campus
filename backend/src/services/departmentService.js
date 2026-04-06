@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
 import Department from "../models/DepartmentModel.js";
 import Service from "../models/serviceModel.js";
-import Counter from "../models/counterModel.js";
+import User from "../models/userModel.js";
 import Banner from "../models/bannerModel.js";
-
+import { updateService, deleteService } from "./servicesService.js";
 /**
  * ➕ Create department
  */
@@ -67,57 +67,75 @@ export const getDepartmentById = async (id) => {
 /**
  * ✏️ Update department
  */
+
 export const updateDepartment = async (id, data, io = null) => {
   try {
+    /* ================= 🛑 VALIDATION ================= */
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new Error("Invalid Department ID");
     }
 
+    /* ================= 📦 FIND EXISTING ================= */
     const department = await Department.findById(id);
     if (!department) {
       throw new Error("Department not found");
     }
 
-    // 🔤 normalize name
+    const previousStatus = department.status;
+
+    /* ================= 🔤 NORMALIZE NAME ================= */
     if (data.name) {
       data.name = data.name.trim().toUpperCase();
 
-      // 🔍 check duplicate name in OTHER departments
-      const existing = await Department.findOne({
+      const exists = await Department.findOne({
         name: data.name,
-        _id: { $ne: id }, // 👈 exclude current department
+        _id: { $ne: id },
       });
 
-      if (existing) {
+      if (exists) {
         throw new Error("Department name already exists");
       }
     }
 
-    // ✏️ update department
+    /* ================= ✏️ UPDATE DEPARTMENT ================= */
     const updatedDepartment = await Department.findByIdAndUpdate(id, data, {
       new: true,
       runValidators: true,
     });
 
-    // ⛔ If inactive → pause services & counters
-    if (updatedDepartment.status === "inactive") {
-      await Service.updateMany({ departmentId: id }, { isPaused: true });
+    /* ================= 🔄 CHECK STATUS CHANGE ================= */
+    const statusChanged = data.status && data.status !== previousStatus;
 
-      const serviceIds = (
-        await Service.find({ departmentId: id }).select("_id")
-      ).map((s) => s._id);
+    /* ================= 🔥 CALL SERVICE UPDATE ================= */
+    if (statusChanged) {
+      const services = await Service.find({ departmentId: id }).select("_id");
 
-      await Counter.updateMany(
-        { serviceId: { $in: serviceIds } },
-        { isActive: false },
+      await Promise.all(
+        services.map(async (service) => {
+          try {
+            await updateService(
+              service._id,
+              { isPaused: updatedDepartment.status === "inactive" },
+              io,
+            );
+          } catch (err) {
+            console.error("Service update failed:", service._id, err.message);
+          }
+        }),
       );
     }
 
-    // 📡 real-time update
+    /* ================= 📡 SOCKET EVENT ================= */
     if (io) {
-      io.emit("departmentUpdated", updatedDepartment);
+      io.emit("departmentUpdated", {
+        id: updatedDepartment._id,
+        name: updatedDepartment.name,
+        status: updatedDepartment.status,
+        statusChanged,
+      });
     }
 
+    /* ================= ✅ RETURN ================= */
     return updatedDepartment;
   } catch (err) {
     console.error("❌ Update Department Error:", err.message);
@@ -129,30 +147,54 @@ export const updateDepartment = async (id, data, io = null) => {
  * 🗑 Delete department
  */
 export const deleteDepartment = async (id, io = null) => {
-  if (!mongoose.Types.ObjectId.isValid(id))
-    throw new Error("Invalid Department ID");
+  try {
+    /* ================= 🛑 VALIDATION ================= */
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      throw new Error("Invalid Department ID");
+    }
 
-  // Get related services
-  const services = await Service.find({ departmentId: id }).select("_id");
-  const serviceIds = services.map((s) => s._id);
+    /* ================= 📦 FIND SERVICES ================= */
+    const services = await Service.find({ departmentId: id }).select("_id");
 
-  // Delete related data first
-  await Counter.deleteMany({ serviceId: { $in: serviceIds } });
-  await Service.deleteMany({ departmentId: id });
-  await Banner.deleteMany({ departmentId: id });
+    /* ================= 🔥 DELETE SERVICES ================= */
+    await Promise.all(
+      services.map(async (service) => {
+        try {
+          await deleteService(service._id, io); // reuse logic
+        } catch (err) {
+          console.error("Service delete failed:", service._id, err.message);
+        }
+      }),
+    );
 
-  // Delete department
-  const department = await Department.findByIdAndDelete(id);
+    /* ================= 🧹 DELETE BANNERS ================= */
+    await Banner.deleteMany({ departmentId: id });
 
-  if (!department) throw new Error("Department not found");
+    /* ================= 👤 REMOVE DEPARTMENT FROM USERS ================= */
+    await User.updateMany(
+      { departmentId: id },
+      { $set: { departmentId: null } },
+    );
 
-  // 📡 real-time update
-  if (io) {
-    io.emit("departmentDeleted", {
-      id: department._id,
-      name: department.name,
-    });
+    /* ================= 🗑️ DELETE DEPARTMENT ================= */
+    const department = await Department.findByIdAndDelete(id);
+
+    if (!department) {
+      throw new Error("Department not found");
+    }
+
+    /* ================= 📡 SOCKET ================= */
+    if (io) {
+      io.emit("departmentDeleted", {
+        id: department._id,
+        name: department.name,
+      });
+    }
+
+    /* ================= ✅ RETURN ================= */
+    return department;
+  } catch (err) {
+    console.error("❌ Delete Department Error:", err.message);
+    throw err;
   }
-
-  return department;
 };

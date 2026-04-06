@@ -24,10 +24,20 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
 
   bool loading = true;
 
+  /// 🔥 SEARCH CONTROLLER (ADDED)
+  final TextEditingController searchController = TextEditingController();
+  bool isSearching = false;
+
   @override
   void initState() {
     super.initState();
     fetchData();
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
   }
 
   /// ================= FETCH DATA =================
@@ -45,6 +55,35 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
     }
 
     setState(() => loading = false);
+  }
+
+  /// ================= SEARCH LOGIC (ADDED) =================
+  void applySearch(String query) {
+    if (query.isEmpty) {
+      setState(() {
+        filteredCounters = counters;
+      });
+      return;
+    }
+
+    final q = query.toLowerCase();
+
+    setState(() {
+      filteredCounters = counters.where((c) {
+        final staffText = c.staffObjects
+            .map((s) => "${s['name']} ${s['email'] ?? ''}".toLowerCase())
+            .join(" ");
+
+        final service = allServices
+            .firstWhereOrNull((s) => s['_id'].toString() == c.serviceId);
+
+        final serviceName = (service?['name'] ?? '').toString().toLowerCase();
+
+        return c.name.toLowerCase().contains(q) ||
+            serviceName.contains(q) ||
+            staffText.contains(q);
+      }).toList();
+    });
   }
 
   /// ================= DELETE =================
@@ -80,7 +119,6 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
     }
   }
 
-  /// ================= SERVICE PAUSED CHECK =================
   bool isServicePaused(String? serviceId) {
     if (serviceId == null) return false;
 
@@ -93,7 +131,6 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
     return service['isPaused'] == true;
   }
 
-  /// ================= HELPER =================
   String getDepartmentName(dynamic service) {
     if (service['departmentId'] is Map) {
       return service['departmentId']['name'] ?? "";
@@ -101,8 +138,9 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
     return "";
   }
 
-  /// ================= CREATE / EDIT DIALOG =================
+  /// ================= CREATE / EDIT DIALOG (UNCHANGED) =================
   void showCounterDialog({CounterModel? counter}) async {
+    final rootContext = context;
     if (counter != null && isServicePaused(counter.serviceId)) {
       showBottomMessage(context, "Service is paused. Cannot edit.",
           isError: true);
@@ -141,7 +179,6 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
               content: SingleChildScrollView(
                 child: Column(
                   children: [
-                    /// COUNTER NAME
                     TextField(
                       controller: nameController,
                       decoration: InputDecoration(
@@ -152,72 +189,58 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 15),
+                    SizedBox(
+                      width: double.infinity,
+                      child: DropdownButtonFormField<String>(
+                        isExpanded: true,
+                        value: selectedServiceId,
+                        hint: const Text("Select Service"),
+                        items: activeServices.map((s) {
+                          String deptName = "";
 
-                    /// SERVICE DROPDOWN
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedServiceId,
-                      hint: const Text("Select Service"),
-                      items: activeServices.map((s) {
-                        String deptName = "";
-
-                        /// If department already populated
-                        if (s['departmentId'] is Map) {
-                          deptName = s['departmentId']['name'] ?? "";
-                        }
-
-                        /// Otherwise get from allServices
-                        else {
-                          final fullService = allServices.firstWhereOrNull(
-                            (srv) =>
-                                srv['_id'].toString() == s['_id'].toString(),
-                          );
-
-                          if (fullService != null &&
-                              fullService['departmentId'] is Map) {
-                            deptName =
-                                fullService['departmentId']['name'] ?? "";
+                          if (s['departmentId'] is Map) {
+                            deptName = s['departmentId']['name'] ?? "";
                           }
-                        }
 
-                        return DropdownMenuItem(
-                          value: s['_id'].toString(),
-                          child: Text("${s['name']} ($deptName)"),
-                        );
-                      }).toList(),
-                      onChanged: (value) async {
-                        if (value == null) return;
+                          return DropdownMenuItem(
+                            value: s['_id'].toString(),
+                            child: Text(
+                              "${s['name']} ($deptName)",
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (value) async {
+                          if (value == null) return;
 
-                        if (isServicePaused(value)) {
-                          showBottomMessage(context, "This service is paused",
-                              isError: true);
-                          return;
-                        }
+                          if (isServicePaused(value)) {
+                            showBottomMessage(context, "This service is paused",
+                                isError: true);
+                            return;
+                          }
 
-                        setDialogState(() {
-                          selectedServiceId = value;
-                          selectedStaffObjects = [];
-                          localStaffList = [];
-                        });
+                          setDialogState(() {
+                            selectedServiceId = value;
+                            selectedStaffObjects = [];
+                            localStaffList = [];
+                          });
 
-                        final staff = await loadStaffByService(value);
+                          final staff = await loadStaffByService(value);
 
-                        setDialogState(() {
-                          localStaffList = staff;
-                        });
-                      },
-                      decoration: InputDecoration(
-                        labelText: "Service",
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          setDialogState(() {
+                            localStaffList = staff;
+                          });
+                        },
+                        decoration: InputDecoration(
+                          labelText: "Service",
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 15),
-
-                    /// STAFF MULTI SELECT
                     if (selectedServiceId != null)
                       MultiSelectDialogField<String>(
                         items: localStaffList
@@ -240,10 +263,7 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
                           });
                         },
                       ),
-
                     const SizedBox(height: 15),
-
-                    /// ACTIVE SWITCH
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -262,8 +282,6 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
                   ],
                 ),
               ),
-
-              /// ACTION BUTTONS
               actions: [
                 TextButton(
                   child: const Text("Cancel"),
@@ -275,14 +293,6 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
                   ),
                   child: const Text("Save"),
                   onPressed: () async {
-                    if (nameController.text.isEmpty ||
-                        selectedServiceId == null ||
-                        selectedStaffObjects.isEmpty) {
-                      showBottomMessage(context, "Fill all fields",
-                          isError: true);
-                      return;
-                    }
-
                     try {
                       final staffIds = selectedStaffObjects
                           .map((s) => s['_id'].toString())
@@ -305,12 +315,12 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
                         );
                       }
 
-                      Navigator.pop(context);
+                      Navigator.pop(rootContext);
                       await fetchData();
-
-                      showBottomMessage(context, "Saved successfully");
+                      showBottomMessage(rootContext, "Saved successfully");
                     } catch (e) {
-                      showBottomMessage(context, e.toString(), isError: true);
+                      showBottomMessage(rootContext, e.toString(),
+                          isError: true);
                     }
                   },
                 ),
@@ -345,19 +355,12 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: ListTile(
-        title: Text(
-          counter.name,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: Text(counter.name),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text("Service: $serviceLabel"),
-            Text(
-              "Staff: $staffNames",
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Text("Staff: $staffNames"),
             Text("Status: ${counter.isActive ? "Active" : "Inactive"}"),
           ],
         ),
@@ -365,19 +368,8 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: Icon(
-                Icons.edit,
-                color: paused ? Colors.grey : lightPurple,
-              ),
-              onPressed: paused
-                  ? () {
-                      showBottomMessage(
-                          context, "Service paused. Edit disabled",
-                          isError: true);
-                    }
-                  : () {
-                      showCounterDialog(counter: counter);
-                    },
+              icon: Icon(Icons.edit, color: paused ? Colors.grey : lightPurple),
+              onPressed: () => showCounterDialog(counter: counter),
             ),
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
@@ -394,7 +386,29 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Manage Counters"),
+        title: isSearching
+            ? TextField(
+                controller: searchController,
+                autofocus: true,
+                onChanged: applySearch,
+                decoration: const InputDecoration(
+                  hintText: "Search counters...",
+                  border: InputBorder.none,
+                ),
+              )
+            : const Text("Manage Counters"),
+        actions: [
+          IconButton(
+            icon: Icon(isSearching ? Icons.close : Icons.search),
+            onPressed: () {
+              setState(() {
+                isSearching = !isSearching;
+                searchController.clear();
+                filteredCounters = counters;
+              });
+            },
+          )
+        ],
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())

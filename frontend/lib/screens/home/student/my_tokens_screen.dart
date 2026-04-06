@@ -14,7 +14,7 @@ class MyTokensScreen extends StatefulWidget {
 class _MyTokensScreenState extends State<MyTokensScreen> {
   List<TokenModel> tokens = [];
   List<TokenModel> filteredTokens = [];
-  Map<String, String> serviceNames = {}; // serviceId -> serviceName
+  Map<String, String> serviceNames = {}; // kept (no UI change)
 
   bool isLoading = true;
   String searchQuery = "";
@@ -36,23 +36,8 @@ class _MyTokensScreenState extends State<MyTokensScreen> {
     try {
       final data = await TokenService.getMyTokens();
 
-      // Fetch unique service names
-      Set<String> uniqueServiceIds = data
-          .map((t) => t.serviceId ?? "")
-          .where((id) => id.isNotEmpty)
-          .toSet();
-
-      Map<String, String> tempServiceNames = Map.from(serviceNames);
-
-      await Future.wait(uniqueServiceIds.map((id) async {
-        if (!tempServiceNames.containsKey(id)) {
-          tempServiceNames[id] = await TokenService.getServiceName(id);
-        }
-      }));
-
       setState(() {
         tokens = data;
-        serviceNames = tempServiceNames;
         applySearchFilter();
         isLoading = false;
       });
@@ -67,8 +52,8 @@ class _MyTokensScreenState extends State<MyTokensScreen> {
       filteredTokens = tokens;
     } else {
       filteredTokens = tokens.where((t) {
-        final name = serviceNames[t.serviceId] ?? "";
-        return name.toLowerCase().contains(searchQuery.toLowerCase());
+        final name = (t.serviceName ?? "").toLowerCase();
+        return name.contains(searchQuery.toLowerCase());
       }).toList();
     }
   }
@@ -91,7 +76,7 @@ class _MyTokensScreenState extends State<MyTokensScreen> {
   }
 
   Widget buildTokenCard(TokenModel token) {
-    final serviceName = serviceNames[token.serviceId] ?? "Loading...";
+    final serviceName = token.serviceName ?? "Unknown Service";
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

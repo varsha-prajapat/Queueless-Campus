@@ -8,46 +8,74 @@ import { suceessful_register_invite } from "../utils/successful_register_invite.
 
 export const authService = {
   // ================= REGISTER USING INVITE =================
-  registerUserWithInvite: async ({ tokenData, name, password }) => {
-    if (!tokenData?.email || !tokenData?.role) {
-      throw new ApiError(
-        STATUS.ERROR.BAD_REQUEST.statusCode,
-        "Invalid invitation token",
+  registerUserWithInvite: async ({ tokenData, name, phone, password }) => {
+    try {
+      /* ================= VALIDATION ================= */
+
+      if (!tokenData?.email || !tokenData?.role) {
+        throw new ApiError(
+          STATUS.ERROR.BAD_REQUEST.statusCode,
+          "Invalid invitation token",
+        );
+      }
+
+      if (!name || !password) {
+        throw new ApiError(
+          STATUS.ERROR.BAD_REQUEST.statusCode,
+          "Name and password are required",
+        );
+      }
+
+      /* ================= NORMALIZE EMAIL ================= */
+
+      const email = tokenData.email.toLowerCase().trim();
+
+      /* ================= CHECK EXISTING USER ================= */
+
+      const existingUser = await User.findOne({ email });
+
+      if (existingUser) {
+        throw new ApiError(
+          STATUS.ERROR.CONFLICT.statusCode,
+          "User already registered",
+        );
+      }
+
+      /* ================= HASH PASSWORD ================= */
+
+      const hashedPassword = await bcrypt.hash(
+        password,
+        Number(env.BCRYPT_SALT_ROUNDS) || 10,
       );
+
+      /* ================= CREATE USER ================= */
+
+      const user = await User.create({
+        name: name.trim(),
+        phone: phone?.trim() || null, // ✅ added safely
+        email,
+        passwordHash: hashedPassword,
+        role: tokenData.role,
+        departmentId: tokenData.departmentId || null,
+        isEmailVerified: true,
+        isActive: true,
+      });
+
+      /* ================= EMAIL NOTIFICATION ================= */
+
+      await suceessful_register_invite(name.trim(), email);
+
+      /* ================= RESPONSE ================= */
+
+      return {
+        success: true,
+        message: "User registered successfully",
+        userId: user._id,
+        role: user.role,
+      };
+    } catch (error) {
+      throw error;
     }
-
-    const existingUser = await User.findOne({ email: tokenData.email });
-
-    if (existingUser) {
-      throw new ApiError(
-        STATUS.ERROR.CONFLICT.statusCode,
-        "User already registered",
-      );
-    }
-
-    const hashedPassword = await bcrypt.hash(
-      password,
-      Number(env.BCRYPT_SALT_ROUNDS) || 10,
-    );
-
-    const user = await User.create({
-      name,
-      email: tokenData.email.toLowerCase().trim(),
-      passwordHash: hashedPassword,
-      role: tokenData.role,
-      departmentId: tokenData.departmentId || null,
-      isEmailVerified: true,
-      isActive: true,
-    });
-
-    await suceessful_register_invite(name, tokenData.email);
-
-    return {
-      success: true,
-      message: "User registered successfully",
-      userId: user._id,
-      role: user.role,
-    };
   },
 
   // ================= NORMAL REGISTER =================
