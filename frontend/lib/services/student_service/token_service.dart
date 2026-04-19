@@ -62,6 +62,7 @@ class TokenService {
           return TokenStats.fromJson({
             "currentToken": data["currentToken"]?.toString() ?? "-",
             "nextToken": data["nextToken"]?.toString() ?? "-",
+            "peopleAhead": data["peopleAhead"] is int ? data["peopleAhead"] : 0,
             "waiting": data["waiting"] is int ? data["waiting"] : 0,
             "servedToday": data["servedToday"] is int ? data["servedToday"] : 0,
             "urgentWaiting":

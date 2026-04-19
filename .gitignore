@@ -5,10 +5,7 @@ node_modules/
 
 # ================== ENV FILES ==================
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
 
 # ================== LOGS ==================
 npm-debug.log*
@@ -24,20 +21,20 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# ================== UPLOADS (IMPORTANT) ==================
-public/upload/*
-!public/upload/.gitkeep
+# ================== UPLOADS ==================
+backend/public/upload/*
+backend/public/banner/*
+!backend/public/upload/.gitkeep
+!backend/public/banner/.gitkeep
 
 # ================== FLUTTER ==================
-.flutter-plugins
-.flutter-plugins-dependencies
+frontend/android/
+frontend/ios/
 .dart_tool/
 .packages
 .pub-cache/
 .pub/
-ios/Pods/
-android/.gradle/
-android/app/build/
+build/
 
 # ================== IDE ==================
 .vscode/

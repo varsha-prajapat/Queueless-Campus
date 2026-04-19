@@ -72,6 +72,7 @@ export const confirmPaymentCtrl = async (req, res) => {
 export const getTokenStats = async (req, res) => {
   try {
     const stats = await getTokenStatsService(req.user._id);
+    console.log("stats", stats);
 
     return res.json({
       success: true,

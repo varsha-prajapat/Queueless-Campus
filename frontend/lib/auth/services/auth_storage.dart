@@ -23,10 +23,6 @@ class AuthStorage {
     await _storage.write(key: _refreshTokenKey, value: refreshToken);
   }
 
-  static Future<void> saveAccessToken(String token) async {
-    await _storage.write(key: _accessTokenKey, value: token);
-  }
-
   // ================= GET =================
 
   static Future<String?> getAccessToken() async {
@@ -60,6 +56,11 @@ class AuthStorage {
       await clear();
       return false;
     }
+  }
+
+  //save access token
+  static Future<void> saveAccessToken(String token) async {
+    await _storage.write(key: _accessTokenKey, value: token);
   }
 
   // ================= REFRESH TOKEN =================

@@ -298,9 +298,30 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
                           .map((s) => s['_id'].toString())
                           .toList();
 
+                      // 🔴 VALIDATION ADDED
+                      if (selectedServiceId == null) {
+                        showBottomMessage(rootContext, "Please select service",
+                            isError: true);
+                        return;
+                      }
+
+                      if (staffIds.isEmpty) {
+                        showBottomMessage(
+                            rootContext, "Please select at least one staff",
+                            isError: true);
+                        return;
+                      }
+
+                      if (nameController.text.trim().isEmpty) {
+                        showBottomMessage(
+                            rootContext, "Counter name cannot be empty",
+                            isError: true);
+                        return;
+                      }
+
                       if (counter == null) {
                         await CounterService.createCounter(
-                          name: nameController.text,
+                          name: nameController.text.trim(),
                           serviceId: selectedServiceId!,
                           staffIds: staffIds,
                           isActive: isActive,
@@ -308,7 +329,7 @@ class _ManageCountersScreenState extends State<ManageCountersScreen> {
                       } else {
                         await CounterService.updateCounter(
                           id: counter.id,
-                          name: nameController.text,
+                          name: nameController.text.trim(),
                           serviceId: selectedServiceId!,
                           staffIds: staffIds,
                           isActive: isActive,

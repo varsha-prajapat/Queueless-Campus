@@ -303,52 +303,92 @@ export const getMyTokensService = async (studentId) => {
 
 /* ================= TOKEN STATS ================= */
 export const getTokenStatsService = async (studentId) => {
-  const tokens = await Token.find({ studentId }).lean();
-
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
   // ======================
-  // STATUS GROUPING
+  // 1. GET ALL USER TOKENS (for stats only)
   // ======================
-  const waitingTokens = tokens.filter((t) => t.status === "waiting");
-  const servingToken = tokens.find((t) => t.status === "serving");
-  const myActiveToken = tokens.find((t) =>
-    ["waiting", "serving"].includes(t.status),
-  );
+  const userTokens = await Token.find({ studentId }).lean();
 
-  // ======================
-  // COUNTS
-  // ======================
-  const waiting = waitingTokens.length;
+  const completed = userTokens.filter((t) => t.status === "completed").length;
+  const cancelled = userTokens.filter((t) => t.status === "cancelled").length;
+  const skipped = userTokens.filter((t) => t.status === "skipped").length;
 
-  const completed = tokens.filter((t) => t.status === "completed").length;
-  const cancelled = tokens.filter((t) => t.status === "cancelled").length;
-  const skipped = tokens.filter((t) => t.status === "skipped").length;
-
-  const servedToday = tokens.filter(
-    (t) => t.status === "completed" && new Date(t.updatedAt) >= todayStart,
+  const servedToday = userTokens.filter(
+    (t) =>
+      t.status === "completed" &&
+      t.updatedAt &&
+      new Date(t.updatedAt) >= todayStart,
   ).length;
 
   // ======================
-  // QUEUE POSITION LOGIC
+  // 2. GET ACTIVE TOKEN (IMPORTANT)
+  // ======================
+  const myActiveToken = await Token.findOne({
+    studentId,
+    status: { $in: ["waiting", "serving"] },
+  }).lean();
+
+  // 👉 If no active token
+  if (!myActiveToken) {
+    return {
+      currentToken: "-",
+      yourToken: "-",
+      nextToken: "-",
+
+      peopleAhead: 0,
+      waiting: 0,
+
+      completed,
+      cancelled,
+      skipped,
+      servedToday,
+    };
+  }
+
+  // ======================
+  // 3. GET QUEUE TOKENS (SAME COUNTER)
+  // ======================
+  const queueTokens = await Token.find({
+    counterId: myActiveToken.counterId, // 🔥 IMPORTANT
+    status: { $in: ["waiting", "serving"] },
+  })
+    .sort({ createdAt: 1 }) // oldest first
+    .lean();
+
+  const waitingTokens = queueTokens.filter((t) => t.status === "waiting");
+
+  // ======================
+  // 4. CURRENT TOKEN (SERVING)
+  // ======================
+  const servingToken = queueTokens.find((t) => t.status === "serving");
+
+  // ======================
+  // 5. PEOPLE AHEAD
   // ======================
   let peopleAhead = 0;
 
-  if (myActiveToken && myActiveToken.status === "waiting") {
+  if (myActiveToken.status === "waiting") {
     peopleAhead = waitingTokens.filter(
-      (t) => t.createdAt < myActiveToken.createdAt,
+      (t) => new Date(t.createdAt) < new Date(myActiveToken.createdAt),
     ).length;
   }
 
   // ======================
-  // NEXT TOKEN IN QUEUE
+  // 6. NEXT TOKEN
   // ======================
   const nextToken =
-    waitingTokens.sort(
-      (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
-    )[0]?.tokenNumber || "-";
+    waitingTokens.length > 0 ? waitingTokens[0].tokenNumber : "-";
 
+  // ======================
+  // 7. WAITING COUNT (QUEUE)
+  // ======================
+  const waiting = waitingTokens.length;
+
+  // ======================
+  // FINAL RESPONSE
+  // ======================
   return {
     currentToken: servingToken?.tokenNumber || "-",
     yourToken: myActiveToken?.tokenNumber || "-",

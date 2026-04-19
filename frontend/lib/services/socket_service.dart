@@ -34,9 +34,8 @@ class SocketService {
 
   // ----------------- SERVER URL -----------------
   String get _serverUrl {
-    if (Platform.isAndroid) return 'http://localhost:3005';
-    if (Platform.isIOS) return 'http://localhost:3005';
-    return 'http://localhost:3005';
+    if (Platform.isAndroid) return 'http://localhost:3005'; // emulator
+    return 'http://192.168.1.100:3005'; // 🔁 change to your PC IP
   }
 
   bool get isConnected => socket?.connected ?? false;
@@ -47,7 +46,7 @@ class SocketService {
     required List<String> roles,
     List<String>? counters,
   }) {
-    // 🔥 USER CHANGE DETECT → CLEAN OLD SOCKET
+    // 🔥 USER CHANGE → CLEAN OLD SOCKET
     if (this.userId != null && this.userId != userId) {
       _forceDisposeSocket();
     }
@@ -61,7 +60,13 @@ class SocketService {
   Future<void> connect() async {
     if (userId == null || roles == null) return;
 
-    // 🔥 ALWAYS CLEAN OLD SOCKET FIRST
+    // 🔥 Prevent duplicate connection
+    if (isConnected) {
+      print("⚠️ Socket already connected");
+      return;
+    }
+
+    // 🔥 Clean old socket
     _forceDisposeSocket();
 
     _initialized = true;
@@ -70,7 +75,7 @@ class SocketService {
       _serverUrl,
       IO.OptionBuilder()
           .setTransports(['websocket'])
-          .disableAutoConnect() // 🔥 manual control
+          .disableAutoConnect()
           .setReconnectionAttempts(5)
           .setReconnectionDelay(2000)
           .setQuery({
@@ -86,22 +91,22 @@ class SocketService {
     socket!.onConnect((_) {
       print("✅ Socket Connected: $userId");
 
-      // join personal room
+      // 👤 user room
       socket?.emit('joinRoom', 'user_$userId');
 
-      // join role rooms
+      // 👥 role rooms
       for (var role in roles!) {
         socket?.emit('joinRoom', 'role_$role');
       }
 
-      // staff counters
-      if (roles!.contains('staff') && counters != null) {
+      // 🧑‍💼 staff counters
+      if (roles!.contains('STAFF') && counters != null) {
         for (var counterId in counters!) {
           socket?.emit('joinRoom', 'counter_$counterId');
         }
       }
 
-      // register listeners
+      // listeners
       _registerNotificationListeners();
       _registerTokenListeners();
       _registerAdminListeners();
@@ -136,7 +141,6 @@ class SocketService {
 
         try {
           final notif = Map<String, dynamic>.from(data);
-
           if (!_notifController.isClosed) {
             _notifController.add(notif);
           }
@@ -165,7 +169,6 @@ class SocketService {
 
         try {
           final normalized = Map<String, dynamic>.from(data);
-
           if (!_tokenController.isClosed) {
             _tokenController.add(normalized);
           }
@@ -185,7 +188,6 @@ class SocketService {
 
       try {
         final adminData = Map<String, dynamic>.from(data);
-
         if (!_adminController.isClosed) {
           _adminController.add(adminData);
         }
@@ -207,7 +209,7 @@ class SocketService {
     socket?.off(event);
   }
 
-  // ----------------- FORCE SOCKET CLEAN -----------------
+  // ----------------- FORCE CLEAN -----------------
   void _forceDisposeSocket() {
     if (socket != null) {
       socket!.clearListeners();
@@ -223,8 +225,11 @@ class SocketService {
 
     _forceDisposeSocket();
 
-    _initialized = false;
+    // 🔥 IMPORTANT RESET (fixes role bug)
+    userId = null;
+    roles = null;
+    counters = null;
 
-    // ❗ STREAMS CLOSE NAHI KARNE (IMPORTANT)
+    _initialized = false;
   }
 }

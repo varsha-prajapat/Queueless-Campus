@@ -79,6 +79,10 @@ class _OTPScreenState extends State<OTPScreen> {
         await profileProvider.fetchProfile();
 
         final socketService = SocketService();
+
+        // 🔥 FIX: ensure old socket is cleared before new init
+        socketService.dispose();
+
         final userId = await AuthRoleHelper.getUserId();
         final String role = (await AuthRoleHelper.getRole()).toUpperCase();
 
@@ -101,7 +105,9 @@ class _OTPScreenState extends State<OTPScreen> {
           counters: counterIds,
         );
 
-        socketService.connect();
+        if (!socketService.isConnected) {
+          await socketService.connect();
+        }
       }
 
       if (!mounted) return;

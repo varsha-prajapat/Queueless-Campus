@@ -33,9 +33,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _logout() async {
     try {
-      /// 🔥 SOCKET DISCONNECT (IMPORTANT)
-      SocketService().dispose();
-    } catch (_) {}
+      final socket = SocketService();
+
+      // 🔍 Debug
+      print("🚪 Logging out user: ${socket.userId}");
+
+      // 🔥 Inform backend only if connected
+      if (socket.isConnected && socket.userId != null) {
+        socket.emit('logout', {
+          'userId': socket.userId,
+        });
+
+        // ⏳ Give backend time to process
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+
+      // 🔥 Force disconnect + cleanup
+      socket.dispose();
+    } catch (e) {
+      print("⚠️ Logout Socket Error: $e");
+    }
 
     /// 🔑 Clear tokens
     await AuthStorage.clear();

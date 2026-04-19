@@ -33,8 +33,10 @@ class _QueueStatusScreenState extends State<QueueStatusScreen> {
 
     try {
       final data = await TokenService.getTokenStats();
+
       print(
-          "DEBUG: currentToken='${data.currentToken}', nextToken='${data.nextToken}', waiting='${data.waiting}'");
+        "DEBUG: currentToken='${data.currentToken}', nextToken='${data.nextToken}', waiting='${data.waiting}'",
+      );
 
       setState(() {
         stats = data;
@@ -53,7 +55,6 @@ class _QueueStatusScreenState extends State<QueueStatusScreen> {
     String displayValue;
 
     if (isYourToken) {
-      // Show a friendly message if user hasn't booked a token
       displayValue = (value != null && value.trim().isNotEmpty)
           ? value.trim()
           : "No token booked yet";
@@ -74,19 +75,27 @@ class _QueueStatusScreenState extends State<QueueStatusScreen> {
     );
   }
 
-  /// Parse token safely as integer
+  /// Safe parse token (FIXED)
   int parseToken(String? token) {
     if (token == null) return 0;
-    final t = token.trim();
-    final val = int.tryParse(t) ?? 0;
-    return val > 0 ? val : 0;
+
+    final cleaned = token.trim();
+
+    // remove extra text like "12 (Urgent)"
+    final numeric = cleaned.replaceAll(RegExp(r'[^0-9]'), '');
+
+    return int.tryParse(numeric) ?? 0;
   }
 
-  /// Calculate people ahead
+  /// FIXED People Ahead Logic (IMPORTANT FIX)
   int calculatePeopleAhead(String? current, String? your) {
     final currentInt = parseToken(current);
     final yourInt = parseToken(your);
+
+    if (currentInt == 0 || yourInt == 0) return 0;
+
     final ahead = yourInt - currentInt;
+
     return ahead > 0 ? ahead : 0;
   }
 
@@ -132,8 +141,9 @@ class _QueueStatusScreenState extends State<QueueStatusScreen> {
                         buildRow(
                           "People Ahead",
                           calculatePeopleAhead(
-                                  stats!.currentToken, stats!.nextToken)
-                              .toString(),
+                            stats!.currentToken,
+                            stats!.nextToken,
+                          ).toString(),
                         ),
                         buildRow(
                           "Waiting",
@@ -145,15 +155,15 @@ class _QueueStatusScreenState extends State<QueueStatusScreen> {
                         ),
                         buildRow(
                           "Completed",
-                          stats!.completed.toString() ?? "0",
+                          stats!.completed.toString(),
                         ),
                         buildRow(
                           "Cancelled",
-                          stats!.cancelled.toString() ?? "0",
+                          stats!.cancelled.toString(),
                         ),
                         buildRow(
                           "Skipped",
-                          stats!.skipped.toString() ?? "0",
+                          stats!.skipped.toString(),
                         ),
                       ],
                     ),

@@ -8,6 +8,13 @@ class TokenStats {
   final int cancelled;
   final int skipped;
 
+  // ✅ ADDED (SAFE)
+  final int? tokenNumber;
+  final String? paymentStatus;
+
+  // 🔥 ADDED
+  final int peopleAhead;
+
   TokenStats({
     required this.currentToken,
     required this.nextToken,
@@ -17,6 +24,13 @@ class TokenStats {
     this.completed = 0,
     this.cancelled = 0,
     this.skipped = 0,
+
+    // ✅ ADDED
+    this.tokenNumber,
+    this.paymentStatus,
+
+    // 🔥 ADDED
+    this.peopleAhead = 0,
   });
 
   factory TokenStats.empty() {
@@ -29,6 +43,13 @@ class TokenStats {
       completed: 0,
       cancelled: 0,
       skipped: 0,
+
+      // ✅ ADDED
+      tokenNumber: null,
+      paymentStatus: null,
+
+      // 🔥 ADDED
+      peopleAhead: 0,
     );
   }
 
@@ -43,12 +64,19 @@ class TokenStats {
       completed: json["completed"] is int ? json["completed"] : 0,
       cancelled: json["cancelled"] is int ? json["cancelled"] : 0,
       skipped: json["skipped"] is int ? json["skipped"] : 0,
+
+      // ✅ ADDED (SAFE PARSE)
+      tokenNumber: json["tokenNumber"] is int ? json["tokenNumber"] : null,
+      paymentStatus: json["paymentStatus"]?.toString(),
+
+      // 🔥 ADDED
+      peopleAhead: json["peopleAhead"] is int ? json["peopleAhead"] : 0,
     );
   }
 
   @override
   String toString() {
-    return 'TokenStats(current: $currentToken, next: $nextToken, waiting: $waiting, served: $servedToday, urgent: $urgentWaiting, completed: $completed, cancelled: $cancelled, skipped: $skipped)';
+    return 'TokenStats(current: $currentToken, next: $nextToken, waiting: $waiting, served: $servedToday, urgent: $urgentWaiting, completed: $completed, cancelled: $cancelled, skipped: $skipped, peopleAhead: $peopleAhead)';
   }
 }
 
@@ -58,11 +86,14 @@ class TokenModel {
   String status;
   final bool isUrgent;
   final String? serviceId;
-  final String? serviceName; // ✅ NEW
+  final String? serviceName;
   final String? studentId;
   final String? counterId;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  // ✅ ADDED (OPTIONAL FIELD – SAFE)
+  final String? paymentStatus;
 
   TokenModel({
     required this.id,
@@ -70,11 +101,14 @@ class TokenModel {
     required this.status,
     this.isUrgent = false,
     this.serviceId,
-    this.serviceName, // ✅ NEW
+    this.serviceName,
     this.studentId,
     this.counterId,
     this.createdAt,
     this.updatedAt,
+
+    // ✅ ADDED
+    this.paymentStatus,
   });
 
   factory TokenModel.fromJson(Map<String, dynamic> json, {String? studentId}) {
@@ -118,11 +152,14 @@ class TokenModel {
       status: parseStatus(json["status"]),
       isUrgent: json["isUrgent"] is bool ? json["isUrgent"] : false,
       serviceId: parseServiceId(json["serviceId"] ?? json["service"]),
-      serviceName: parseServiceName(json["serviceName"]), // ✅ NEW
+      serviceName: parseServiceName(json["serviceName"]),
       studentId: studentId ?? json["studentId"]?.toString(),
       counterId: json["counterId"]?.toString(),
       createdAt: parseDate(json["createdAt"]),
       updatedAt: parseDate(json["updatedAt"]),
+
+      // ✅ ADDED
+      paymentStatus: json["paymentStatus"]?.toString(),
     );
   }
 
@@ -135,11 +172,14 @@ class TokenModel {
       "status": status,
       "isUrgent": isUrgent,
       "serviceId": serviceId,
-      "serviceName": serviceName, // ✅ NEW
+      "serviceName": serviceName,
       "studentId": studentId,
       "counterId": counterId,
       "createdAt": createdAt?.toIso8601String(),
       "updatedAt": updatedAt?.toIso8601String(),
+
+      // ✅ ADDED
+      "paymentStatus": paymentStatus,
     };
   }
 
@@ -156,11 +196,12 @@ class TokenModel {
     String? status,
     bool? isUrgent,
     String? serviceId,
-    String? serviceName, // ✅ NEW
+    String? serviceName,
     String? studentId,
     String? counterId,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? paymentStatus, // ✅ ADDED
   }) {
     return TokenModel(
       id: id ?? this.id,
@@ -168,11 +209,14 @@ class TokenModel {
       status: status ?? this.status,
       isUrgent: isUrgent ?? this.isUrgent,
       serviceId: serviceId ?? this.serviceId,
-      serviceName: serviceName ?? this.serviceName, // ✅ NEW
+      serviceName: serviceName ?? this.serviceName,
       studentId: studentId ?? this.studentId,
       counterId: counterId ?? this.counterId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+
+      // ✅ ADDED
+      paymentStatus: paymentStatus ?? this.paymentStatus,
     );
   }
 }

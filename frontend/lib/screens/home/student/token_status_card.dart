@@ -15,93 +15,45 @@ class _TokenStatusCardState extends State<TokenStatusCard> {
   late final SocketService _socket;
   StreamSubscription? _notifSub;
 
+  double _lastProgress = 0.0;
+
   @override
   void initState() {
     super.initState();
 
-    // Initialize SocketService
     _socket = SocketService();
     _socket.connect();
 
-    // Listen for all relevant token events
-    _notifSub = _socket.notifStream.listen((data) async {
-      await _refreshTokenStats();
+    _notifSub = _socket.notifStream.listen((_) {
+      _refreshTokenStats();
     });
 
-    // Optional direct binding
-    _socket.socket?.on('token:created', (_) => _refreshTokenStats());
-    _socket.socket?.on('token:called', (_) => _refreshTokenStats());
-    _socket.socket?.on('token:completed', (_) => _refreshTokenStats());
-    _socket.socket?.on('token:paymentConfirmed', (_) => _refreshTokenStats());
+    _socket.socket?.on('token:created', _handleUpdate);
+    _socket.socket?.on('token:called', _handleUpdate);
+    _socket.socket?.on('token:completed', _handleUpdate);
+    _socket.socket?.on('token:paymentConfirmed', _handleUpdate);
+  }
+
+  void _handleUpdate(dynamic _) {
+    _refreshTokenStats();
   }
 
   @override
   void dispose() {
     _notifSub?.cancel();
+
+    _socket.socket?.off('token:created', _handleUpdate);
+    _socket.socket?.off('token:called', _handleUpdate);
+    _socket.socket?.off('token:completed', _handleUpdate);
+    _socket.socket?.off('token:paymentConfirmed', _handleUpdate);
+
     super.dispose();
   }
 
-  /// Refresh token stats via Provider
   Future<void> _refreshTokenStats() async {
     if (!mounted) return;
     final provider = Provider.of<TokenProvider>(context, listen: false);
     await provider.refresh();
-  }
-
-  /// People ahead
-  int peopleAhead(TokenProvider provider) {
-    final stats = provider.stats;
-    if (stats == null || stats.currentToken == "-" || stats.nextToken == "-") {
-      return 0;
-    }
-    try {
-      final diff = int.parse(stats.nextToken) - int.parse(stats.currentToken);
-      return diff < 0 ? 0 : diff;
-    } catch (_) {
-      return 0;
-    }
-  }
-
-  /// Progress for LinearProgressIndicator
-  double progress(TokenProvider provider) {
-    final stats = provider.stats;
-    if (stats == null || stats.currentToken == "-" || stats.nextToken == "-") {
-      return 0.0;
-    }
-    try {
-      final current = int.parse(stats.currentToken);
-      final next = int.parse(stats.nextToken);
-      final total = next - current;
-      if (total <= 0) return 1.0;
-      final ahead = peopleAhead(provider);
-      return (1 - (ahead / total)).clamp(0.0, 1.0);
-    } catch (_) {
-      return 0.0;
-    }
-  }
-
-  /// Determine token status text and color
-  Map<String, dynamic> tokenStatus(TokenProvider provider) {
-    final stats = provider.stats;
-    if (stats == null) return {"text": "No Token Booked", "color": Colors.grey};
-
-    if (stats.currentToken != "-" &&
-        stats.nextToken != "-" &&
-        stats.waiting > 0) {
-      // Currently serving
-      return {"text": "Serving", "color": Colors.green};
-    } else if (stats.nextToken != "-" &&
-        stats.waiting == 0 &&
-        stats.currentToken == "-") {
-      // Payment pending / not started
-      return {"text": "Payment Pending", "color": Colors.red};
-    } else if (stats.currentToken == "-" && stats.nextToken == "-") {
-      // No token
-      return {"text": "No Token Booked", "color": Colors.grey};
-    } else {
-      // Waiting
-      return {"text": "Waiting", "color": Colors.orange};
-    }
   }
 
   @override
@@ -113,7 +65,35 @@ class _TokenStatusCardState extends State<TokenStatusCard> {
         final stats = provider.stats;
         if (stats == null) return const SizedBox();
 
-        final status = tokenStatus(provider);
+        final status = "";
+
+        Color statusColor;
+        String statusText;
+
+        switch (status) {
+          case "serving":
+            statusColor = Colors.green;
+            statusText = "Serving";
+            break;
+
+          case "waiting_payment":
+            statusColor = Colors.red;
+            statusText = "Payment Pending";
+            break;
+
+          case "waiting":
+            statusColor = Colors.orange;
+            statusText = "Waiting";
+            break;
+
+          default:
+            statusColor = Colors.grey;
+            statusText = "Processing";
+        }
+
+        final total = stats.waiting + stats.completed;
+        final progress =
+            total == 0 ? 0.0 : (stats.completed / total).clamp(0.0, 1.0);
 
         return Container(
           width: double.infinity,
@@ -138,6 +118,7 @@ class _TokenStatusCardState extends State<TokenStatusCard> {
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -149,41 +130,56 @@ class _TokenStatusCardState extends State<TokenStatusCard> {
                   _tokenBox(
                     title: "Your Token",
                     token: stats.nextToken,
-                    color: status["color"] as Color,
+                    color: statusColor,
                   ),
                 ],
               ),
+
               const SizedBox(height: 16),
+
               Row(
                 children: [
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: (status["color"] as Color).withOpacity(0.2),
+                      color: statusColor.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      status["text"] as String,
+                      statusText,
                       style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: status["color"] as Color),
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: LinearProgressIndicator(
-                      value: progress(provider),
-                      minHeight: 7,
-                      backgroundColor: const Color(0xffCBD5F5),
-                      color: Colors.blue,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: _lastProgress, end: progress),
+                      duration: const Duration(milliseconds: 500),
+                      builder: (context, value, _) {
+                        return LinearProgressIndicator(
+                          value: value,
+                          minHeight: 7,
+                          backgroundColor: const Color(0xffCBD5F5),
+                          color: Colors.blue,
+                        );
+                      },
+                      onEnd: () {
+                        _lastProgress = progress;
+                      },
                     ),
                   ),
                 ],
               ),
+
               const SizedBox(height: 12),
+
+              // 🔥 DIRECT BACKEND VALUE (NO FUNCTION)
               Text(
-                "People Ahead: ${peopleAhead(provider)}",
+                "People Ahead: ${stats.peopleAhead}",
                 style: const TextStyle(fontSize: 13, color: Colors.black54),
               ),
             ],
@@ -208,12 +204,19 @@ class _TokenStatusCardState extends State<TokenStatusCard> {
       ),
       child: Column(
         children: [
-          Text(title,
-              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
+          ),
           const SizedBox(height: 6),
-          Text(token,
-              style: TextStyle(
-                  fontSize: 21, fontWeight: FontWeight.bold, color: color)),
+          Text(
+            token,
+            style: TextStyle(
+              fontSize: 21,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
         ],
       ),
     );
