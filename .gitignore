@@ -30,6 +30,12 @@ backend/public/banner/*
 # ================== FLUTTER ==================
 frontend/android/
 frontend/ios/
+frontend/linux/
+frontend/macos/
+frontend/windows/
+frontend/web/
+frontend/test/
+
 .dart_tool/
 .packages
 .pub-cache/
