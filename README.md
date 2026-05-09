@@ -198,33 +198,7 @@ Make sure you have the following installed:
     flutter run
     ```
 
-    This will launch the Flutter application. If running on a web browser, it will open at `http://localhost:[detected_flutter_port]`. If running on a mobile emulator/device, it will launch the app directly.
-
-## 📁 Project Structure
-
-```
-Queueless-Campus/
-├── .gitignore          # Git ignore file
-├── README.md           # Project README
-├── backend/            # Backend API service
-│   ├── node_modules/   # Node.js dependencies
-│   ├── src/            # Backend source code (controllers, routes, models)
-│   ├── .env.example    # Example environment variables for backend
-│   ├── package.json    # Backend dependencies and scripts
-│   └── server.js       # Backend entry point (or app.js)
-└── frontend/           # Flutter frontend application
-    ├── lib/            # Dart source code (screens, widgets, services)
-    │   ├── api/        # API integration services
-    │   ├── auth/       # Authentication logic
-    │   ├── components/ # Reusable UI widgets
-    │   ├── models/     # Data models
-    │   ├── screens/    # Application pages/screens
-    │   └── main.dart   # Main entry point for the Flutter app
-    ├── assets/         # Static assets (images, fonts)
-    ├── pubspec.yaml    # Flutter project dependencies and metadata
-    ├── .env.example    # Example environment variables for frontend
-    └── test/           # Flutter test files
-```
+    This will launch the Flutter application. If running on a web browser, it will open at `http://localhost:[detected_flutter_port]`. If running on a mobile emulator/device, it will
 
 ## ⚙️ Configuration
 
