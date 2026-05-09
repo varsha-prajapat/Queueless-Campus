@@ -76,19 +76,19 @@ The platform facilitates various campus services, from administrative tasks and 
 
 ### ▶️ Admin Module Demo
 
-<video src="videos/admin.mp4" controls width="800"></video>
+[Watch Admin Demo](videos/admin.mp4)
 
 ### ▶️ Staff Module Demo
 
-<video src="videos/staff.mp4" controls width="800"></video>
+[Watch Staff Demo](videos/staff.mp4)
 
 ### ▶️ Student Module Demo
 
-<video src="videos/student.mp4" controls width="800"></video>
+[Watch Student Demo](videos/student.mp4)
 
 ### ▶️ Invited User Demo
 
-<video src="videos/invited.mp4" controls width="800"></video>
+[Watch Invited Demo](videos/invited.mp4)
 
 <br>
 
