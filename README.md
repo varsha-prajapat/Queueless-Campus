@@ -71,24 +71,26 @@ The platform facilitates various campus services, from administrative tasks and 
 <img src="images/WhatsApp Image 2026-05-09 at 5.16.57 PM.jpeg" width="220"/>
 
 </div>
-
+<br>
 ## 🎥 Demo Videos
 
 ### ▶️ Admin Module Demo
 
-<a href="videos/admin.mp4">Watch Admin Demo</a>
+<video src="videos/admin.mp4" controls width="800"></video>
 
 ### ▶️ Staff Module Demo
 
-<a href="videos/staff.mp4">Watch Staff Demo</a>
+<video src="videos/staff.mp4" controls width="800"></video>
 
 ### ▶️ Student Module Demo
 
-<a href="videos/student.mp4">Watch Student Demo</a>
+<video src="videos/student.mp4" controls width="800"></video>
 
 ### ▶️ Invited User Demo
 
-<a href="videos/invited.mp4">Watch Invited Demo</a>
+<video src="videos/invited.mp4" controls width="800"></video>
+
+<br>
 
 ## 🛠️ Tech Stack
 
