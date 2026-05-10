@@ -11,8 +11,6 @@
 
 **Streamlining campus services with efficient digital queue management and seamless appointment scheduling.**
 
-<!-- TODO: Add live demo link --> | <!-- TODO: Add documentation link -->
-
 </div>
 
 ## 📖 Overview
@@ -42,7 +40,6 @@ The platform facilitates various campus services, from administrative tasks and 
 
 <img src="images/WhatsApp Image 2026-05-09 at 5.15.33 PM (2).jpeg" width="220"/>
 <img src="images/WhatsApp Image 2026-05-09 at 5.15.33 PM (3).jpeg" width="220"/>
-<img src="images/WhatsApp Image 2026-05-09 at 5.15.33 PM.jpeg" width="220"/>
 <img src="images/WhatsApp Image 2026-05-09 at 5.15.34 PM (1).jpeg" width="220"/>
 
 <img src="images/WhatsApp Image 2026-05-09 at 5.15.34 PM (2).jpeg" width="220"/>
@@ -71,7 +68,7 @@ The platform facilitates various campus services, from administrative tasks and 
 <img src="images/WhatsApp Image 2026-05-09 at 5.16.57 PM.jpeg" width="220"/>
 
 </div>
-<br>
+
 ## 🎥 Demo Videos
 
 ### ▶️ Admin Module Demo
@@ -386,6 +383,6 @@ Follow the **Quick Start** instructions above to set up your local development e
 
 **⭐ Star this repo if you find it helpful!**
 
-Made with by [Varsha Prajapat](https://github.com/varsha-prajapat)
+Made by [Varsha Prajapat](https://github.com/varsha-prajapat)
 
 </div>
